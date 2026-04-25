@@ -112,7 +112,7 @@ All commands use the `openclaw-learn` binary.
 
 Global flags: `--workspace <path>`, `--verbose`
 
-Full details: [`references/cli-reference.md`](references/cli-reference.md)
+Full details: [`references/triggers.md`](references/triggers.md) (includes CLI command catalog and trigger conditions)
 
 ## Configuration
 

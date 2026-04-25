@@ -1,0 +1,27 @@
+{
+  "normal_note": {
+    "events": [
+      { "type": "user_message", "content": "Help me write a function to parse CSV", "timestamp": "2026-04-20T10:00:00Z" },
+      { "type": "assistant_message", "content": "Here is a CSV parser using split and map...", "timestamp": "2026-04-20T10:00:05Z" },
+      { "type": "tool_call", "content": "write_file('parser.ts', ...)", "timestamp": "2026-04-20T10:00:10Z", "metadata": { "tool": "write_file", "token_usage": 500 } },
+      { "type": "user_message", "content": "Thanks, that works!", "timestamp": "2026-04-20T10:01:00Z" }
+    ]
+  },
+  "candidate_signal": {
+    "events": [
+      { "type": "user_message", "content": "The deployment keeps failing with timeout errors", "timestamp": "2026-04-20T11:00:00Z" },
+      { "type": "error", "content": "Command timed out after 30s: npm run deploy", "timestamp": "2026-04-20T11:00:05Z", "metadata": { "token_usage": 200 } },
+      { "type": "assistant_message", "content": "Let me increase the timeout and retry...", "timestamp": "2026-04-20T11:00:10Z" },
+      { "type": "tool_call", "content": "exec('npm run deploy --timeout=120')", "timestamp": "2026-04-20T11:00:15Z", "metadata": { "tool": "exec", "token_usage": 100 } },
+      { "type": "error", "content": "Deploy failed: connection refused", "timestamp": "2026-04-20T11:01:00Z", "metadata": { "token_usage": 50 } },
+      { "type": "assistant_message", "content": "The server seems down. Let me check the health endpoint.", "timestamp": "2026-04-20T11:01:05Z" }
+    ]
+  },
+  "conflict_signal": {
+    "events": [
+      { "type": "user_message", "content": "Always use rm -rf to clean build artifacts", "timestamp": "2026-04-20T12:00:00Z" },
+      { "type": "assistant_message", "content": "Using rm -rf for cleanup...", "timestamp": "2026-04-20T12:00:05Z" },
+      { "type": "tool_call", "content": "exec('rm -rf dist/')", "timestamp": "2026-04-20T12:00:10Z", "metadata": { "tool": "exec", "token_usage": 50 } }
+    ]
+  }
+}

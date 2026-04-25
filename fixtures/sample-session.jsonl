@@ -1,0 +1,9 @@
+{"type":"session","version":3,"id":"0f66e7d7-ef6d-4e45-9e9b-c0a06dc933b0","timestamp":"2026-03-29T14:00:14.411Z","cwd":"/home/[REDACTED]/.openclaw/workspace"}
+{"type":"model_change","id":"994e0593","parentId":null,"timestamp":"2026-03-29T14:00:14.417Z","provider":"github-copilot","modelId":"gemini-3.1-pro-preview"}
+{"type":"thinking_level_change","id":"2316ac8b","parentId":"994e0593","timestamp":"2026-03-29T14:00:14.417Z","thinkingLevel":"low"}
+{"type":"custom","customType":"model-snapshot","data":{"timestamp":1774792814420,"provider":"github-copilot","modelApi":"openai-completions","modelId":"gemini-3.1-pro-preview"},"id":"7ba67f0d","parentId":"2316ac8b","timestamp":"2026-03-29T14:00:14.420Z"}
+{"type":"message","id":"73f474dd","parentId":"7ba67f0d","timestamp":"2026-03-29T14:00:14.483Z","message":{"role":"user","content":[{"type":"text","text":"[Subagent Task]: [REDACTED_PROMPT]"}],"timestamp":1774792814422}}
+{"type":"message","id":"15ad01b8","parentId":"73f474dd","timestamp":"2026-03-29T14:00:20.581Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"[REDACTED_THINKING]","thinkingSignature":"reasoning_text"},{"type":"text","text":"pong"}],"api":"openai-completions","provider":"github-copilot","model":"gemini-3.1-pro-preview","usage":{"input":17937,"output":1,"cacheRead":0,"cacheWrite":0,"totalTokens":17938,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":1774792814482,"responseId":"REDACTED"}}
+{this is not valid json and should be skipped}
+{"type":"message","id":"abc99999","parentId":"15ad01b8","timestamp":"2026-03-29T14:00:25.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"exec","input":{"command":"ls"}}]}}
+{"type":"message","id":"def88888","parentId":"abc99999","timestamp":"2026-03-29T14:00:26.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"file1.txt\nfile2.txt"}]}}

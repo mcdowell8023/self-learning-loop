@@ -1,0 +1,17 @@
+{
+  "success_session": {
+    "session_id": "sess-e2e-success-001",
+    "events": [
+      { "type": "user_message", "content": "Deploy the app with timeout fix", "timestamp": "2026-04-20T14:00:00Z" },
+      { "type": "tool_call", "content": "exec('npm run deploy --timeout=120')", "timestamp": "2026-04-20T14:00:05Z", "metadata": { "tool": "exec", "token_usage": 300 } },
+      { "type": "assistant_message", "content": "Deployment successful with increased timeout.", "timestamp": "2026-04-20T14:01:00Z", "metadata": { "token_usage": 200 } }
+    ]
+  },
+  "abnormal_exit_session": {
+    "session_id": "sess-e2e-abnormal-001",
+    "events": [
+      { "type": "user_message", "content": "Run the migration script", "timestamp": "2026-04-20T15:00:00Z" },
+      { "type": "error", "content": "Process killed: OOM", "timestamp": "2026-04-20T15:00:30Z", "metadata": { "token_usage": 100 } }
+    ]
+  }
+}

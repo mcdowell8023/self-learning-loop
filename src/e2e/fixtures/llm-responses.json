@@ -1,0 +1,46 @@
+[
+  [
+    {
+      "problem_category": "deployment_timeout",
+      "trigger_conditions": "deploy timeout connection refused server down retry",
+      "recommended_action": "Increase deployment timeout to 120s and add health check before deploy",
+      "scope": "general",
+      "tags": ["deployment", "timeout", "reliability"],
+      "diff_summary": "Add --timeout=120 flag and pre-deploy health check",
+      "files_touched": ["deploy.sh", "scripts/health-check.sh"],
+      "assertions": [
+        { "type": "command_exit_code", "description": "deploy with timeout succeeds", "command": "echo deploy-ok", "expected_exit_code": 0 }
+      ],
+      "confidence": 0.85,
+      "rationale": "Repeated timeout failures indicate insufficient default timeout"
+    }
+  ],
+  [
+    {
+      "problem_category": "deployment_timeout",
+      "trigger_conditions": "deploy timeout connection refused server down retry",
+      "recommended_action": "Increase deployment timeout to 120s and add health check before deploy",
+      "scope": "general",
+      "tags": ["deployment", "timeout"],
+      "diff_summary": "Same strategy duplicate test",
+      "files_touched": [],
+      "assertions": [],
+      "confidence": 0.9,
+      "rationale": "Duplicate for dedup testing"
+    }
+  ],
+  [
+    {
+      "problem_category": "unsafe_cleanup",
+      "trigger_conditions": "rm -rf delete remove clean dangerous destructive",
+      "recommended_action": "Use trash command instead of rm -rf for safe cleanup",
+      "scope": "general",
+      "tags": ["safety", "cleanup"],
+      "diff_summary": "Replace rm -rf with trash in cleanup scripts",
+      "files_touched": ["Makefile"],
+      "assertions": [],
+      "confidence": 0.7,
+      "rationale": "rm -rf is destructive; trash provides recoverability"
+    }
+  ]
+]

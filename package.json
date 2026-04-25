@@ -1,0 +1,27 @@
+{
+  "name": "@openclaw/learning-loop",
+  "version": "0.1.0-p1a",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw Learning Loop — Phase 1a (T-P1a-003 Candidate Store)",
+  "bin": {
+    "openclaw-learn": "./dist/cli/learn.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && mkdir -p dist/store/migrations && cp src/store/migrations/*.sql dist/store/migrations/",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "simple-statistics": "^7.8.9",
+    "yaml": "^2.5.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.5.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

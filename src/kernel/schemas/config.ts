@@ -46,6 +46,16 @@ const CollectConfigSchema = z.object({
   dedup: DedupConfigSchema.default({}),
 });
 
+const ReflectLLMConfigSchema = z.object({
+  provider: z.enum(['openclaw', 'openai-compatible']).default('openclaw'),
+  model: z.string().default('github-copilot/claude-haiku-4.5'),
+  api_key_env: z.string().default('COPILOT_API_KEY'),
+  base_url: z.string().default('https://gen.pollinations.ai/v1'),
+  temperature: z.number().min(0).max(2).default(0.3),
+  max_tokens: z.number().int().positive().default(2000),
+  timeout_seconds: z.number().int().positive().default(60),
+});
+
 const ReflectConfigSchema = z.object({
   model: z.string().default('claude-sonnet-4.6'),
   fallback_model: z.string().default('gpt-5-mini'),
@@ -56,6 +66,7 @@ const ReflectConfigSchema = z.object({
   daily_token_budget: z.number().int().nonnegative().default(50000),
   min_confidence: z.number().min(0).max(1).default(0.65),
   dedup_threshold: z.number().min(0).max(1).default(0.85),
+  llm: ReflectLLMConfigSchema.default({}),
 });
 
 const SampleBiasProtectionSchema = z.object({

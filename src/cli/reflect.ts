@@ -4,7 +4,7 @@
 //
 // 流程: 加载 config → 读反思源 → trigger 判定 → candidate-generator → 写入 Store (除非 --dry-run)
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, appendFileSync } from 'node:fs';
 import { isAbsolute, join, resolve, basename } from 'node:path';
 import { arch, platform } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -14,6 +14,7 @@ import type { SessionEvent } from '../reflect/reflection-prompt.js';
 import type { EnvFingerprint } from '../kernel/types.js';
 import { openCandidateStore } from '../store/candidate-store.js';
 import type { LLMClient, LLMCompleteOptions } from '../reflect/llm-client.js';
+import { createRealLLMClient, type LLMProviderConfig } from '../reflect/llm-client-real.js';
 
 // ---------------------------------------------------------------------------
 // CLI interface
@@ -43,6 +44,7 @@ const USAGE = [
   '  --from YYYY-MM-DD  Start date (inclusive, overrides watermark)',
   '  --to YYYY-MM-DD    End date (inclusive, default: yesterday)',
   '  --today            Shortcut: reflect on today\'s diary only',
+  '  --provider <name>  LLM provider: openclaw | openai-compatible (overrides config)',
   '  --verbose, -v      Show event previews and raw LLM responses',
   '  -h, --help         Show this help',
   '',
@@ -57,6 +59,7 @@ interface ParsedReflect {
   to?: string;
   today?: boolean;
   verbose?: boolean;
+  provider?: 'openclaw' | 'openai-compatible';
   code?: number;
   message?: string;
 }
@@ -69,6 +72,7 @@ function parseReflectArgs(argv: string[]): ParsedReflect {
   let to: string | undefined;
   let today = false;
   let verbose = false;
+  let provider: 'openclaw' | 'openai-compatible' | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -76,6 +80,11 @@ function parseReflectArgs(argv: string[]): ParsedReflect {
     else if (a === '--dry-run') dryRun = true;
     else if (a === '--today') today = true;
     else if (a === '--verbose' || a === '-v') verbose = true;
+    else if (a === '--provider') {
+      const v = argv[++i] as 'openclaw' | 'openai-compatible' | undefined;
+      if (v !== 'openclaw' && v !== 'openai-compatible') return { kind: 'error', code: 2, message: 'error: --provider must be openclaw or openai-compatible' };
+      provider = v;
+    }
     else if (a === '--workspace') {
       const v = argv[++i];
       if (!v) return { kind: 'error', code: 2, message: 'error: --workspace requires a value' };
@@ -96,7 +105,7 @@ function parseReflectArgs(argv: string[]): ParsedReflect {
       return { kind: 'error', code: 2, message: `error: unknown argument: ${a}` };
     }
   }
-  return { kind: 'ok', workspace, dryRun, source, from, to, today, verbose };
+  return { kind: 'ok', workspace, dryRun, source, from, to, today, verbose, provider };
 }
 
 // ---------------------------------------------------------------------------
@@ -271,58 +280,37 @@ function fileToEvents(filePath: string): SessionEvent[] {
 }
 
 // ---------------------------------------------------------------------------
-// Simple Pollinations LLM Client (production)
+// Token budget inline check
 // ---------------------------------------------------------------------------
 
-class PollinationsLLMClient implements LLMClient {
-  private readonly apiKey: string;
-
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
-  }
-
-  async complete(prompt: string, opts?: LLMCompleteOptions): Promise<string> {
-    const timeoutMs = opts?.timeoutMs ?? 60_000;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const resp = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: opts?.model ?? 'openai',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: opts?.temperature ?? 0.2,
-          max_tokens: opts?.maxTokens ?? 4096,
-          ...(opts?.json ? { response_format: { type: 'json_object' } } : {}),
-          seed: Math.floor(Math.random() * 1_000_000),
-        }),
-        signal: controller.signal,
-      });
-      if (!resp.ok) {
-        throw new Error(`Pollinations API error: ${resp.status} ${resp.statusText}`);
-      }
-      const data = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      const raw = data.choices?.[0]?.message?.content ?? '[]';
-      // candidate-generator expects a JSON array; some models wrap in {"candidates": [...]}
+function checkTokenBudget(workspace: string, dailyBudget: number): { ok: boolean; used: number; budget: number } {
+  const today = fmtDate(new Date());
+  const auditPath = join(workspace, 'learn', 'audit', `reflect-${today}.jsonl`);
+  let used = 0;
+  if (existsSync(auditPath)) {
+    const lines = readFileSync(auditPath, 'utf-8').split('\n').filter(Boolean);
+    for (const line of lines) {
       try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed) && parsed && typeof parsed === 'object') {
-          // Find first array property
-          for (const v of Object.values(parsed)) {
-            if (Array.isArray(v)) return JSON.stringify(v);
-          }
+        const entry = JSON.parse(line);
+        if (entry.tokens_used && typeof entry.tokens_used === 'number') {
+          used += entry.tokens_used;
         }
-      } catch { /* let caller handle */ }
-      return raw;
-    } finally {
-      clearTimeout(timer);
+      } catch { /* skip malformed */ }
     }
   }
+  return { ok: used < dailyBudget, used, budget: dailyBudget };
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+function writeAuditEvent(workspace: string, event: Record<string, unknown>): void {
+  const today = fmtDate(new Date());
+  const auditDir = join(workspace, 'learn', 'audit');
+  mkdirSync(auditDir, { recursive: true });
+  const auditPath = join(auditDir, `reflect-${today}.jsonl`);
+  appendFileSync(auditPath, JSON.stringify({ ...event, timestamp: new Date().toISOString() }) + '\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -477,14 +465,43 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
     nodeVersion: process.version,
   };
 
-  // LLM client
-  const apiKey = process.env.POLLINATIONS_API_KEY;
-  if (!apiKey) {
-    const msg = 'error: POLLINATIONS_API_KEY not set — cannot call LLM for reflection';
+  // Token budget check
+  const budgetCheck = checkTokenBudget(workspace, 50000); // TODO: read from config when loader is wired
+  if (!budgetCheck.ok) {
+    const msg = `⚠️  Daily token budget exceeded (${budgetCheck.used}/${budgetCheck.budget}). Skipping reflect.`;
+    out(msg + '\n');
+    writeAuditEvent(workspace, { event: 'reflect_skipped_budget', used: budgetCheck.used, budget: budgetCheck.budget });
+    return { exitCode: 0, message: 'budget exceeded' };
+  }
+
+  // LLM client — provider resolution: CLI flag > env detection > config > default (openclaw)
+  const providerOverride = parsed.provider;
+  let llm: LLMClient;
+  try {
+    const llmConfig: Partial<LLMProviderConfig> = {};
+    if (providerOverride) {
+      llmConfig.provider = providerOverride;
+    } else if (process.env.POLLINATIONS_API_KEY) {
+      // Backward compat: if POLLINATIONS_API_KEY is set, default to openai-compatible
+      llmConfig.provider = 'openai-compatible';
+      llmConfig.api_key_env = 'POLLINATIONS_API_KEY';
+      llmConfig.base_url = 'https://gen.pollinations.ai/v1';
+      llmConfig.model = 'openai'; // Pollinations default model
+    }
+    // For openai-compatible without explicit key, try POLLINATIONS_API_KEY fallback
+    if (llmConfig.provider === 'openai-compatible' && !llmConfig.api_key_env) {
+      if (process.env.POLLINATIONS_API_KEY) {
+        llmConfig.api_key_env = 'POLLINATIONS_API_KEY';
+      }
+    }
+    llm = createRealLLMClient(llmConfig);
+  } catch (e) {
+    const msg = `error: LLM client init failed: ${(e as Error).message}`;
     err(msg + '\n');
     return { exitCode: 4, message: msg };
   }
-  const llm = new PollinationsLLMClient(apiKey);
+
+  writeAuditEvent(workspace, { event: 'reflect_started', provider: providerOverride ?? 'openclaw', events_count: events.length });
 
     const generator = new CandidateGenerator(llm, store);
 
@@ -574,6 +591,14 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
         out(`\n📌 Watermark updated: ${currentWatermark ?? 'none'} → ${latestDate}\n`);
       }
     }
+
+    writeAuditEvent(workspace, {
+      event: 'reflect_completed',
+      candidates: result.candidates.length,
+      dropped: result.dropped.length,
+      persisted: result.persistedCount,
+      error: result.error ?? null,
+    });
 
     return { exitCode: (result.error && result.candidates.length === 0 && result.dropped.length === 0) ? 0 : (result.error ? 1 : 0) };
   } finally {

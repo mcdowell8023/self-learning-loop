@@ -19,7 +19,7 @@ export interface OverrideRunOptions {
 }
 export interface OverrideResult {
     exitCode: number;
-    action?: 'force_graduate' | 'force_retire';
+    action?: 'force_graduate' | 'force_retire' | 'graduation_reverted';
     candidateId?: string;
     fromState?: CandidateState;
     toState?: CandidateState;
@@ -34,7 +34,7 @@ export interface OverrideResult {
 export declare function runOverride(opts: OverrideRunOptions): Promise<OverrideResult>;
 type ParsedOk = {
     kind: 'ok';
-    command: 'force-graduate' | 'force-retire';
+    command: 'force-graduate' | 'force-retire' | 'revert';
     candidateId: string;
     reason: string;
     dbFlag?: string;

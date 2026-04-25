@@ -53,6 +53,9 @@ const ReflectConfigSchema = z.object({
   cron: z.string().default('30 22 * * *'),
   max_candidates_per_session: z.number().int().positive().default(3),
   temperature: z.number().min(0).max(2).default(0.3),
+  daily_token_budget: z.number().int().nonnegative().default(50000),
+  min_confidence: z.number().min(0).max(1).default(0.65),
+  dedup_threshold: z.number().min(0).max(1).default(0.85),
 });
 
 const SampleBiasProtectionSchema = z.object({
@@ -67,6 +70,8 @@ const ShadowConfigSchema = z.object({
   max_daily: z.number().int().positive().default(5),
   observation_mode: z.enum(['passive', 'active']).default('passive'),
   sample_bias_protection: SampleBiasProtectionSchema.default({}),
+  max_same_session_ratio: z.number().min(0).max(1).default(0.3),
+  min_unique_sessions: z.number().int().positive().default(5),
 });
 
 const ConfidenceThresholdSchema = z.object({

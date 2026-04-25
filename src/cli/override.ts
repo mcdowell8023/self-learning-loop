@@ -32,10 +32,12 @@
 // CLI design choice: hand-written argv parser (no commander dep). Keeps the
 // learning-loop package lean and the surface testable.
 
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+import { removeMarkerBlock } from '../graduation/marker-block.js';
+import Database from 'better-sqlite3';
 import {
   CandidateNotFoundError,
   IllegalTransitionError,
@@ -69,7 +71,7 @@ export interface OverrideRunOptions {
 
 export interface OverrideResult {
   exitCode: number;
-  action?: 'force_graduate' | 'force_retire';
+  action?: 'force_graduate' | 'force_retire' | 'graduation_reverted';
   candidateId?: string;
   fromState?: CandidateState;
   toState?: CandidateState;
@@ -88,6 +90,7 @@ const USAGE = [
   'Commands:',
   '  force-graduate <id>    Force candidate to graduated (rule #12; bypasses shadow).',
   '  force-retire   <id>    Force candidate to retired   (rule #13).',
+  '  revert <id>            Revert a graduated candidate back to validated.',
   '',
   'Required:',
   '  --reason <text>        Human rationale written to audit log.',
@@ -143,8 +146,8 @@ export async function runOverride(opts: OverrideRunOptions): Promise<OverrideRes
     }
 
     const fromState = candidate.state;
-    let toState: CandidateState;
-    let action: 'force_graduate' | 'force_retire';
+    let toState: CandidateState = 'validating';
+    let action: 'force_graduate' | 'force_retire' | 'graduation_reverted' = 'force_graduate';
     let wroteArtifact = false;
     let targetFile: string | undefined;
 
@@ -184,7 +187,7 @@ export async function runOverride(opts: OverrideRunOptions): Promise<OverrideRes
           actor: 'user',
         });
       }
-    } else {
+    } else if (command === 'force-retire') {
       action = 'force_retire';
       toState = 'retired';
 
@@ -199,6 +202,58 @@ export async function runOverride(opts: OverrideRunOptions): Promise<OverrideRes
       store.transition(candidateId, fromState, 'retired', 'force_retire', {
         actor: 'user',
       });
+    } else if (command === 'revert') {
+      action = 'graduation_reverted';
+      toState = 'validating';
+
+      if (fromState !== 'graduated') {
+        const msg =
+          `error: illegal override: cannot revert candidate ${candidateId} ` +
+          `from '${fromState}' (revert only works on graduated candidates).`;
+        err(msg + '\n');
+        return { exitCode: 4, message: msg };
+      }
+
+      // Remove marker block if graduation record exists
+      try {
+        const gradDir = join(workspace, 'learn', 'audit', 'graduations');
+        if (existsSync(gradDir)) {
+          const gradFiles = readdirSync(gradDir).filter((f: string) => f.endsWith('.yaml'));
+          for (const f of gradFiles) {
+            const content = readFileSync(join(gradDir, f), 'utf-8');
+            if (content.includes(candidateId)) {
+              const hashMatch = content.match(/content_hash:\s*([a-f0-9]{64})/);
+              if (hashMatch && hashMatch[1]) {
+                const targetMatch = content.match(/target_file:\s*(.+)/);
+                if (targetMatch && targetMatch[1]) {
+                  const targetPath = join(workspace, targetMatch[1].trim());
+                  if (existsSync(targetPath)) {
+                    removeMarkerBlock(targetPath, hashMatch[1]);
+                    wroteArtifact = true;
+                    targetFile = targetPath;
+                  }
+                }
+              }
+              break;
+            }
+          }
+        }
+      } catch { /* marker removal is best-effort */ }
+
+      // Transition graduated → validating (no standard rule exists; direct DB update as escape hatch)
+      const revertDbPath = join(workspace, 'learn', 'candidates.db');
+      if (existsSync(revertDbPath)) {
+        const directDb = new Database(revertDbPath);
+        const nowTs = now().toISOString();
+        directDb.prepare(
+          `UPDATE candidate_state SET state = 'validating', updated_at = ? WHERE candidate_id = ?`
+        ).run(nowTs, candidateId);
+        directDb.prepare(
+          `INSERT INTO state_transitions (candidate_id, from_state, to_state, action, actor, dormant_reason, transitioned_at)
+           VALUES (?, 'graduated', 'validating', 'graduation_reverted', ?, NULL, ?)`
+        ).run(candidateId, actor, nowTs);
+        directDb.close();
+      }
     }
 
     // Audit append
@@ -267,7 +322,7 @@ export async function runOverride(opts: OverrideRunOptions): Promise<OverrideRes
 
 type ParsedOk = {
   kind: 'ok';
-  command: 'force-graduate' | 'force-retire';
+  command: 'force-graduate' | 'force-retire' | 'revert';
   candidateId: string;
   reason: string;
   dbFlag?: string;
@@ -286,7 +341,7 @@ export function parseArgs(argv: string[]): Parsed {
   if (first === '-h' || first === '--help' || first === 'help') {
     return { kind: 'help' };
   }
-  if (first !== 'force-graduate' && first !== 'force-retire') {
+  if (first !== 'force-graduate' && first !== 'force-retire' && first !== 'revert') {
     return { kind: 'error', code: 64, message: `error: unknown command: ${first}` };
   }
 

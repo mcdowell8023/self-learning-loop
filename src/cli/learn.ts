@@ -16,6 +16,9 @@ import { runStatus } from './status.js';
 import { runOverride } from './override.js';
 import { runReflect } from './reflect.js';
 import { runRepair } from './repair.js';
+import { runReview } from './review.js';
+import { runAudit } from './audit.js';
+import { runConfigShow } from './config-show.js';
 import { reloadConfig, loadConfig } from '../config/loader.js';
 
 const TOP_USAGE = [
@@ -27,8 +30,10 @@ const TOP_USAGE = [
   '  init                   Initialise learn/ workspace (SQLite + config.yaml + audit/).',
   '  status [id]            List candidates or show single candidate details.',
   '  reflect              Run a reflection pass (analyse memory, generate candidates).',
-  '  override <sub> ...     Force-graduate / force-retire a candidate (§5.2.2 rules #12/#13).',
-  '  config reload          Reload config.yaml (hot reload with double-buffer).',
+  '  review <sub> ...      Query review gate results (list / show).',
+  '  override <sub> ...     Force-graduate / force-retire / revert a candidate.',
+  '  audit <sub> ...        Query audit log (list / replay / stats).',
+  '  config <sub>           Config management (show / reload).',
   '  repair [--dry-run] [--scope <s>]  Repair missing/stale candidate file mirrors.',
   '  help, -h, --help       Show this help.',
   '',
@@ -71,6 +76,10 @@ export async function runLearn(opts: LearnRunOptions): Promise<LearnResult> {
       const r = await runStatus({ argv: rest, cwd, stdout: out, stderr: err });
       return { exitCode: r.exitCode, command: 'status', subResult: r };
     }
+    case 'review': {
+      const r = await runReview({ argv: rest, cwd, stdout: out, stderr: err });
+      return { exitCode: r.exitCode, command: 'review', subResult: r };
+    }
     case 'override': {
       const r = await runOverride({ argv: rest, cwd, stdout: out, stderr: err });
       return { exitCode: r.exitCode, command: 'override', subResult: r };
@@ -82,6 +91,10 @@ export async function runLearn(opts: LearnRunOptions): Promise<LearnResult> {
     case 'repair': {
       const r = await runRepair({ argv: rest, cwd, stdout: out, stderr: err });
       return { exitCode: r.exitCode, command: 'repair', subResult: r };
+    }
+    case 'audit': {
+      const r = await runAudit({ argv: rest, cwd, stdout: out, stderr: err });
+      return { exitCode: r.exitCode, command: 'audit', subResult: r };
     }
     case 'config': {
       return runConfigGroup(rest, { out, err, cwd });
@@ -106,9 +119,13 @@ async function runConfigGroup(argv: string[], ctx: GroupCtx): Promise<LearnResul
     ctx.out(
       'Usage: openclaw-learn config <subcommand>\n\n' +
         'Subcommands:\n' +
+        '  show      Show current configuration.\n' +
         '  reload    Reload config.yaml (keeps old config on validation failure).\n',
     );
     return { exitCode: 0, command: 'config' };
+  }
+  if (sub === 'show') {
+    return { ...(await runConfigShow({ argv: rest, cwd: ctx.cwd, stdout: ctx.out, stderr: ctx.err })), command: 'config show' };
   }
   if (sub === 'reload') {
     if (rest.some((a) => a === '-h' || a === '--help')) {

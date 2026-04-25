@@ -466,12 +466,34 @@ describe('runOverride: audit trail', () => {
   });
 
   it('isolation: does not touch real ~/.openclaw workspace', () => {
-    // This test doubles as a safety assertion: tmpRoot is inside os.tmpdir,
-    // and no CLI run in this suite passes --workspace pointing elsewhere.
     expect(tmpRoot.startsWith(tmpdir())).toBe(true);
     const realAgents = join(process.env.HOME ?? '~', '.openclaw', 'workspace', 'AGENTS.md');
-    // AGENTS.md may exist; we simply assert we never write to it from these tests.
-    // (No-op sanity check; real guarantee comes from always passing cwd=tmpRoot.)
     expect(realAgents).not.toBe(join(tmpRoot, 'AGENTS.md'));
+  });
+
+  // === revert tests ===
+
+  it('revert: reverts graduated candidate to validating', async () => {
+    const c = seedCandidate('graduated');
+    const r = await runOverride({
+      ...runnerOpts(),
+      argv: ['revert', c.candidate_id, '--reason', 'testing revert'],
+    });
+    expect(r.exitCode).toBe(0);
+    expect(r.action).toBe('graduation_reverted');
+    expect(r.toState).toBe('validating');
+    // Verify via a fresh store read
+    const fresh = store.get(c.candidate_id);
+    expect(fresh?.state).toBe('validating');
+  });
+
+  it('revert: rejects non-graduated candidate', async () => {
+    const c = seedCandidate('pending');
+    const r = await runOverride({
+      ...runnerOpts(),
+      argv: ['revert', c.candidate_id, '--reason', 'should fail'],
+    });
+    expect(r.exitCode).toBe(4);
+    expect(r.message).toContain('revert only works on graduated');
   });
 });

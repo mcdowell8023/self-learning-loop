@@ -454,7 +454,7 @@ describe('learn top-level routing', () => {
     expect(s).toContain('init');
     expect(s).toContain('status');
     expect(s).toContain('override');
-    expect(s).toContain('config reload');
+    expect(s).toContain('config');
   });
 
   it('unknown command → exit 2 + usage', async () => {

@@ -106,12 +106,18 @@ export declare const LearnConfigSchema: z.ZodObject<{
         cron: z.ZodDefault<z.ZodString>;
         max_candidates_per_session: z.ZodDefault<z.ZodNumber>;
         temperature: z.ZodDefault<z.ZodNumber>;
+        daily_token_budget: z.ZodDefault<z.ZodNumber>;
+        min_confidence: z.ZodDefault<z.ZodNumber>;
+        dedup_threshold: z.ZodDefault<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
         model: string;
         fallback_model: string;
         cron: string;
         max_candidates_per_session: number;
         temperature: number;
+        daily_token_budget: number;
+        min_confidence: number;
+        dedup_threshold: number;
         prompt_path?: string | undefined;
     }, {
         model?: string | undefined;
@@ -120,6 +126,9 @@ export declare const LearnConfigSchema: z.ZodObject<{
         cron?: string | undefined;
         max_candidates_per_session?: number | undefined;
         temperature?: number | undefined;
+        daily_token_budget?: number | undefined;
+        min_confidence?: number | undefined;
+        dedup_threshold?: number | undefined;
     }>>;
     shadow: z.ZodDefault<z.ZodObject<{
         min_trials: z.ZodDefault<z.ZodNumber>;
@@ -139,7 +148,11 @@ export declare const LearnConfigSchema: z.ZodObject<{
             min_unique_sessions?: number | undefined;
             max_same_session_ratio?: number | undefined;
         }>>;
+        max_same_session_ratio: z.ZodDefault<z.ZodNumber>;
+        min_unique_sessions: z.ZodDefault<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
+        min_unique_sessions: number;
+        max_same_session_ratio: number;
         min_trials: number;
         max_trials: number;
         max_daily: number;
@@ -150,6 +163,8 @@ export declare const LearnConfigSchema: z.ZodObject<{
             max_same_session_ratio: number;
         };
     }, {
+        min_unique_sessions?: number | undefined;
+        max_same_session_ratio?: number | undefined;
         min_trials?: number | undefined;
         max_trials?: number | undefined;
         max_daily?: number | undefined;
@@ -419,9 +434,14 @@ export declare const LearnConfigSchema: z.ZodObject<{
         cron: string;
         max_candidates_per_session: number;
         temperature: number;
+        daily_token_budget: number;
+        min_confidence: number;
+        dedup_threshold: number;
         prompt_path?: string | undefined;
     };
     shadow: {
+        min_unique_sessions: number;
+        max_same_session_ratio: number;
         min_trials: number;
         max_trials: number;
         max_daily: number;
@@ -520,8 +540,13 @@ export declare const LearnConfigSchema: z.ZodObject<{
         cron?: string | undefined;
         max_candidates_per_session?: number | undefined;
         temperature?: number | undefined;
+        daily_token_budget?: number | undefined;
+        min_confidence?: number | undefined;
+        dedup_threshold?: number | undefined;
     } | undefined;
     shadow?: {
+        min_unique_sessions?: number | undefined;
+        max_same_session_ratio?: number | undefined;
         min_trials?: number | undefined;
         max_trials?: number | undefined;
         max_daily?: number | undefined;

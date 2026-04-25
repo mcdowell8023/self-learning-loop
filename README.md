@@ -1,103 +1,213 @@
-# @openclaw/self-learning-loop (v1.1)
+# @openclaw/self-learning-loop
 
-OpenClaw Self-Learning Loop — v1.1. Reflects on daily diary notes, generates improvement candidates, and manages their lifecycle.
+> Cross-runtime self-learning skill for AI agents.
+> Let your AI extract reusable rules from real conversations and graduate them into AGENTS.md / TOOLS.md automatically.
 
-## Installation
+![version](https://img.shields.io/badge/version-1.1.0--alpha.1-blue)
+![tests](https://img.shields.io/badge/tests-389%20passing-brightgreen)
+![runtimes](https://img.shields.io/badge/runtimes-openclaw%20%7C%20claude--code%20%7C%20opencode%20%7C%20codex-purple)
 
-```bash
-git clone https://github.com/openclaw/self-learning-loop
-cd self-learning-loop && npm install && npm run build
-bash scripts/setup.sh --mode local
-```
+---
 
-**Install modes:**
+## What & Why
 
-| Mode | Command | Description |
-|------|---------|-------------|
-| `local` (default) | `--mode local` | Symlink to `~/.openclaw/workspace/skills/` |
-| `global` | `--mode global` | Symlink to `~/.local/share/openclaw-learn/` (multi-runtime) |
-| `npm` | `--mode npm` | `npm link` for development |
+AI agents make the same mistakes over and over because they have no persistent "experience." Each session starts from scratch — lessons learned yesterday are gone today.
 
-Use `--dry-run` to preview actions without making changes. Use `--runtime <name>` to target a specific runtime (`openclaw`, `claude-code`, `opencode`, `codex`).
+**self-learning-loop** fixes this. It automatically extracts candidate rules from your work sessions, runs them through a four-dimension review gate, monitors them in shadow trials, and graduates proven rules into your `AGENTS.md` / `TOOLS.md`. Next session, the agent loads those rules and doesn't repeat the mistake.
 
-To uninstall:
-
-```bash
-bash scripts/uninstall.sh
-```
+Think of it as the **reflect → verify → internalize** cycle that humans do naturally — but automated for your AI agent.
 
 ## Quick Start
 
 ```bash
-npm run build
+# 1. Clone & build
+git clone https://github.com/mcdowell8023/learning-loop.git
+cd learning-loop && npm install && npm run build
 
-# Initialize workspace (creates learn/ with SQLite DB + config)
-node dist/cli/learn.js init --workspace ~/.openclaw/workspace
+# 2. Install skill (auto-detects OpenClaw / Claude Code / Opencode / Codex)
+bash scripts/setup.sh --mode local
 
-# Run reflection (incremental, from watermark to yesterday)
-node dist/cli/learn.js reflect --workspace ~/.openclaw/workspace
+# 3. Run your first reflection
+openclaw-learn reflect --today
 
-# Reflect on today's diary
-node dist/cli/learn.js reflect --today
-
-# Reflect on specific date range
-node dist/cli/learn.js reflect --from 2026-04-20 --to 2026-04-24
-
-# Reflect on a specific file (bypasses incremental)
-node dist/cli/learn.js reflect --source ~/.openclaw/workspace/memory/2026-04-22.md --dry-run
-
-# Check candidate status
-node dist/cli/learn.js status
+# 4. Check candidate status
+openclaw-learn status
 ```
 
-## Commands
+> **Dry run first?** Add `--dry-run` to `setup.sh` to see what it does without making changes.
+
+## How It Works
+
+```
+  Memory/Sessions
+        │
+        ▼
+  ┌───────────┐    LLM extracts
+  │  Reflect   │───────────────┐
+  └───────────┘                │
+                               ▼
+                    ┌──────────────────┐
+                    │  Candidate Store  │  SQLite + markdown mirror
+                    │  (Strategy +      │  learn/candidates/YYYY-MM-DD/
+                    │   Instance)        │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │  Review Gate      │  4-dimension check:
+                    │  metadata │safety │  metadata, safety,
+                    │  conflict│semantic│  conflict, semantic
+                    └────────┬─────────┘
+                             │ pass
+                             ▼
+                    ┌──────────────────┐
+                    │  Shadow Trial     │  7-day observation
+                    │  (validating)     │  min 5 trials
+                    └────────┬─────────┘
+                             │ pass
+                             ▼
+                    ┌──────────────────┐
+                    │  Graduation       │  Writes marker block
+                    │  → AGENTS.md      │  into target file
+                    │  → TOOLS.md       │
+                    └──────────────────┘
+```
+
+**Key concepts:**
+
+- **Strategy** — A reusable rule template (e.g., "always check return types")
+- **Instance** — A concrete occurrence that triggered the strategy
+- **Review Gate** — Four-dimension automated check before a candidate enters observation
+- **Shadow Trial** — Real-world observation period to validate the rule doesn't cause regressions
+- **Graduation** — Proven rules get a marker block injected into AGENTS.md / TOOLS.md
+
+**State machine:** `pending → reviewing → validating → graduated` (+ `rejected`, `retired`, `dormant`, `archived`)
+
+## Supported Runtimes
+
+| Runtime | Status | Skill Path |
+|---------|--------|------------|
+| OpenClaw | ✅ Tested | `~/.openclaw/workspace/skills/self-learning-loop/` |
+| Claude Code | ✅ Tested | `~/.claude/skills/self-learning-loop/` |
+| Opencode | ✅ Tested | `~/.local/share/opencode/skills/self-learning-loop/` |
+| Codex | 🔄 YAML mapping ready, untested | `configs/codex-mapping.yaml` |
+
+`setup.sh` auto-detects available runtimes and installs to all of them.
+
+## CLI Reference
+
+All commands use the `openclaw-learn` binary.
 
 | Command | Description |
 |---------|-------------|
-| `init` | Initialize `learn/` workspace (SQLite + config.yaml + audit/) |
-| `reflect` | Run reflection pass — analyzes memory files, generates candidates |
-| `status [id]` | List candidates or show single candidate details |
-| `override <sub>` | Force-graduate / force-retire a candidate |
-| `config reload` | Hot-reload config.yaml |
+| `init` | Initialize learn directory (idempotent, safe to re-run) |
+| `reflect --today` | Extract candidates from today's sessions via LLM |
+| `status [id-prefix]` | Show candidate status overview or single candidate detail |
+| `review --candidate <id>` | Run four-dimension review gate on a candidate |
+| `audit [--tail N]` | View audit log entries |
+| `override --candidate <id> --action <act>` | Manual state transitions (`force_graduate`, `reject`, `retire`) |
+| `override revert --candidate <id>` | Revert a graduation (removes marker block) |
+| `config show` | Display merged configuration |
+| `repair` | Rebuild markdown mirrors from SQLite |
 
-## Incremental Reflection
+Global flags: `--workspace <path>`, `--verbose`
 
-`reflect` tracks a **watermark** (last processed date) in SQLite. By default:
-- Processes from `watermark + 1` to yesterday
-- Skips dates whose content hasn't changed (sha256 dedup)
-- `--from` / `--to` overrides the watermark for forced re-processing
-- `--today` is a shortcut for reflecting on today's diary
+Full details: [`references/cli-reference.md`](references/cli-reference.md)
 
-## 万三口令映射
+## Configuration
 
-万三接到以下口令时，自动触发反思：
+User config lives at `~/<workspace>/learn/config.yaml`:
 
-| 口令 | 映射命令 |
-|------|---------|
-| `反思下` | `learning-loop reflect --today` |
-| `/reflect` | `learning-loop reflect --today` |
-| `反思 YYYY-MM-DD` | `learning-loop reflect --from YYYY-MM-DD --to YYYY-MM-DD` |
-| `全量反思` | `learning-loop reflect --from 2026-04-01` (从最早日记开始) |
+```yaml
+reflection:
+  daily_token_budget: 50000
+  llm:
+    provider: openclaw          # or openai-compatible
+    model: github-copilot/claude-haiku-4.5
+    temperature: 0.3
+    max_tokens: 2000
 
-## Cron 自动化
+shadow:
+  observation_days: 7
+  min_trials: 5
+  conflict_threshold: 0.3
 
-每天自动反思昨天的日记：
-
-```bash
-# 注册到 OpenClaw cron（万三手动执行）：
-openclaw cron add --name "daily-reflect" --every 24h --at "06:00" --command "bash ~/open-claw-output/code/learning-loop/scripts/daily-reflect.sh"
+paths:
+  candidates_dir: learn/candidates
 ```
 
-日志输出到：`~/open-claw-output/logs/learning-loop-reflect-YYYY-MM-DD.log`
+Full options: [`references/customization.md`](references/customization.md)
 
-## Development
+## Architecture
 
-```bash
-npm run build      # TypeScript compile + copy migrations
-npm test           # Run all tests (vitest)
-npm run test:watch # Watch mode
+```
+src/
+  reflect/      ← Extract candidates from sessions (LLM integration)
+  review/       ← Four-dimension Review Gate
+  shadow/       ← Shadow trial observation + statistics
+  graduation/   ← AGENTS.md / TOOLS.md marker block writer
+  adapters/     ← Cross-runtime abstraction (OpenClawAdapter, GenericAdapter)
+  cli/          ← Command-line entry points
+  store/        ← SQLite candidate store + markdown mirror
+
+scripts/
+  setup.sh      ← Install skill + CLI to detected runtimes
+  uninstall.sh  ← Clean removal (--no-keep-data for full wipe)
+  daily-reflect.sh    ← Cron-friendly reflect wrapper
+  register-cron.sh    ← Register daily cron job
+  check-token-budget.sh ← Check today's token usage
+
+references/
+  architecture.md     ← Detailed system design
+  cli-reference.md    ← Full CLI documentation
+  customization.md    ← All configuration options
+  runtime-integration.md ← Runtime adapter details
+  triggers.md         ← Trigger conditions and cron setup
 ```
 
-## Environment Variables
+## Automation (Cron)
 
-- `POLLINATIONS_API_KEY` — Required for LLM calls during reflection
+```bash
+bash scripts/register-cron.sh
+# Registers daily reflect at 04:30
+# Skips 03:00-03:59 to avoid collision with OpenClaw memory consolidation
+# Respects daily_token_budget — auto-skips if exceeded
+```
+
+## Roadmap
+
+- **v1.1** ✅ Cross-runtime adapters + real LLM reflect + CLI + test suite
+- **v1.2** — L3/L4 semi-auto/full-auto graduation + A/B metrics-collector
+- **v1.3** — VSCode extension / Web UI for candidate management
+
+## Troubleshooting
+
+Common issues and fixes: [`references/triggers.md`](references/triggers.md)
+
+Quick diagnostics:
+
+```bash
+openclaw-learn status            # Candidate overview
+openclaw-learn audit --tail 20   # Recent audit events
+openclaw skills check 2>&1 | grep self-learning-loop  # Skill registration
+```
+
+See also: [QUICKSTART.md](QUICKSTART.md) for a guided walkthrough.
+
+## Contributing
+
+This is a personal project by [mcdowell8023](https://github.com/mcdowell8023).
+
+- **Bug reports:** Open a GitHub issue with `openclaw-learn status` and `audit --tail 20` output
+- **Pull requests:** Fork → branch → ensure `npm test` passes (389 tests) → PR
+- **Questions:** Open an issue or reach out
+
+## License
+
+[MIT](LICENSE)
+
+## Acknowledgments
+
+- [OpenClaw](https://github.com/nicepkg/openclaw) — AI agent runtime and skill system
+- [Anthropic Claude](https://www.anthropic.com/) — LLM backbone
+- [Pollinations](https://pollinations.ai/) — Multi-modal AI API

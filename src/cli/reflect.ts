@@ -362,9 +362,10 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
   }
 
   // Store (open early for watermark)
+  const candidatesDir = join(learnDir, 'candidates');
   const store = parsed.dryRun
     ? (new DryRunStore() as any)
-    : openCandidateStore({ dbPath });
+    : openCandidateStore({ dbPath, candidatesDir });
 
   try {
 

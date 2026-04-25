@@ -291,7 +291,7 @@ run_init() {
     dry "node $cli status"
   else
     info "Running init..."
-    node "$cli" init --workspace "$(dirname "$data_dir")" || warn "init returned non-zero (may already be initialized)"
+    node "$cli" init --workspace "$(dirname "$data_dir")" || { err "init failed with exit code $?"; return 1; }
     info "Running health check..."
     node "$cli" status || warn "status check returned non-zero"
   fi

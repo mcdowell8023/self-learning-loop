@@ -134,9 +134,9 @@ export async function runInit(opts: InitRunOptions): Promise<InitResult> {
 
   const exists = existsSync(learnDir);
   if (exists && !parsed.force) {
-    const msg = `error: ${learnDir} already exists (use --force to overwrite)`;
-    err(msg + '\n');
-    return { exitCode: 1, message: msg };
+    const msg = `already initialized at ${learnDir}, skipping`;
+    out(msg + '\n');
+    return { exitCode: 0, learnDir, workspace, message: msg };
   }
 
   // Track rollback targets: only remove what we created, not pre-existing unrelated files.

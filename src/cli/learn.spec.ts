@@ -145,7 +145,7 @@ describe('learn init', () => {
     expect(stdoutStr()).toContain('Initialised learn/');
   });
 
-  it('rejects when learn/ already exists without --force', async () => {
+  it('returns exit 0 when learn/ already exists (idempotent)', async () => {
     await runInit({ argv: ['--workspace', tmpRoot], cwd: tmpRoot, stdout: out, stderr: err });
     stdoutBuf = [];
     stderrBuf = [];
@@ -155,8 +155,8 @@ describe('learn init', () => {
       stdout: out,
       stderr: err,
     });
-    expect(r.exitCode).toBe(1);
-    expect(stderrStr()).toContain('already exists');
+    expect(r.exitCode).toBe(0);
+    expect(stdoutStr()).toContain('already initialized');
   });
 
   it('overwrites with --force', async () => {
@@ -177,6 +177,26 @@ describe('learn init', () => {
     const conf = readFileSync(join(tmpRoot, 'learn', 'config.yaml'), 'utf-8');
     expect(conf).not.toBe('# tampered\n');
     expect(conf).toContain('collect:'); // from example file
+  });
+
+  it('--force preserves audit/ directory contents', async () => {
+    await runInit({ argv: ['--workspace', tmpRoot], cwd: tmpRoot, stdout: out, stderr: err });
+    // Write a custom audit entry
+    const auditDir = join(tmpRoot, 'learn', 'audit');
+    writeFileSync(join(auditDir, 'custom.jsonl'), '{"important":true}\n', 'utf-8');
+    stdoutBuf = [];
+    stderrBuf = [];
+
+    const r = await runInit({
+      argv: ['--workspace', tmpRoot, '--force'],
+      cwd: tmpRoot,
+      stdout: out,
+      stderr: err,
+    });
+    expect(r.exitCode).toBe(0);
+    // Audit custom file must survive
+    expect(existsSync(join(auditDir, 'custom.jsonl'))).toBe(true);
+    expect(readFileSync(join(auditDir, 'custom.jsonl'), 'utf-8')).toContain('important');
   });
 
   it('rollback: when config.yaml.example is missing, no partial state', async () => {

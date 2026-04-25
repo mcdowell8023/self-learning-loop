@@ -2,6 +2,30 @@
 
 OpenClaw Self-Learning Loop — v1.1. Reflects on daily diary notes, generates improvement candidates, and manages their lifecycle.
 
+## Installation
+
+```bash
+git clone https://github.com/openclaw/self-learning-loop
+cd self-learning-loop && npm install && npm run build
+bash scripts/setup.sh --mode local
+```
+
+**Install modes:**
+
+| Mode | Command | Description |
+|------|---------|-------------|
+| `local` (default) | `--mode local` | Symlink to `~/.openclaw/workspace/skills/` |
+| `global` | `--mode global` | Symlink to `~/.local/share/openclaw-learn/` (multi-runtime) |
+| `npm` | `--mode npm` | `npm link` for development |
+
+Use `--dry-run` to preview actions without making changes. Use `--runtime <name>` to target a specific runtime (`openclaw`, `claude-code`, `opencode`, `codex`).
+
+To uninstall:
+
+```bash
+bash scripts/uninstall.sh
+```
+
 ## Quick Start
 
 ```bash

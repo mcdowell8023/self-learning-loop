@@ -156,9 +156,11 @@ beforeEach(() => {
   store = openCandidateStore({ dbPath, defaultActor: 'system' });
   stdoutBuf = [];
   stderrBuf = [];
+  process.env.LEARNING_LOOP_WORKSPACE = tmpRoot;
 });
 
 afterEach(() => {
+  delete process.env.LEARNING_LOOP_WORKSPACE;
   try { store.close(); } catch { /* ignore */ }
   if (tmpRoot && existsSync(tmpRoot)) {
     rmSync(tmpRoot, { recursive: true, force: true });

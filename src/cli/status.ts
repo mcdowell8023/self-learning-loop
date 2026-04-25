@@ -18,6 +18,7 @@
 
 import { existsSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
+import { resolveWorkspace } from './workspace-resolver.js';
 import {
   CandidateStore,
   openCandidateStore,
@@ -298,7 +299,11 @@ export async function runStatus(opts: StatusRunOptions): Promise<StatusResult> {
     return { exitCode: 0 };
   }
 
-  const workspace = parsed.workspaceFlag ? resolvePath(parsed.workspaceFlag, cwd) : cwd;
+  const { workspace } = resolveWorkspace({
+    workspaceFlag: parsed.workspaceFlag,
+    cwd,
+    env: process.env,
+  });
   const dbPath = parsed.dbFlag
     ? resolvePath(parsed.dbFlag, cwd)
     : join(workspace, 'learn', 'candidates.db');

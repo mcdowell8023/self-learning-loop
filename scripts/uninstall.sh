@@ -93,7 +93,11 @@ SKILL_LINKS=(
 )
 
 for link in "${SKILL_LINKS[@]}"; do
-  remove_link "$link"
+  if [[ -L "$link" ]]; then
+    remove_link "$link"
+  elif [[ -d "$link" ]]; then
+    remove_dir "$link"
+  fi
 done
 
 # Global share link

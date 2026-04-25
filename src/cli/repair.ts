@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { openCandidateStore } from '../store/candidate-store.js';
 import { repairMirrors } from '../store/candidate-mirror.js';
 import { loadConfig } from '../config/loader.js';
+import { resolveWorkspace } from './workspace-resolver.js';
 
 export interface RepairRunOptions {
   argv: string[];
@@ -34,7 +35,8 @@ const USAGE = [
 ].join('\n');
 
 export async function runRepair(opts: RepairRunOptions): Promise<RepairRunResult> {
-  const { argv, cwd, stdout, stderr } = opts;
+  const { workspace: cwd } = resolveWorkspace({ cwd: opts.cwd, env: process.env });
+  const { argv, stdout, stderr } = opts;
 
   if (argv.includes('-h') || argv.includes('--help')) {
     stdout(USAGE);

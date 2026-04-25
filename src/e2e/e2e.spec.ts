@@ -146,9 +146,11 @@ describe('E2E: Learning Loop Full Pipeline', () => {
     ctx = setupE2E();
     agentsMtimeBefore = getAgentsMtime(ctx);
     __resetConfigForTests();
+    process.env.LEARNING_LOOP_WORKSPACE = ctx.workspaceDir;
   });
 
   afterEach(() => {
+    delete process.env.LEARNING_LOOP_WORKSPACE;
     teardownE2E(ctx);
   });
 

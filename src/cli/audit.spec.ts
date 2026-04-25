@@ -23,9 +23,11 @@ describe('audit CLI', () => {
   beforeEach(() => {
     tempDir = join(tmpdir(), `audit-test-${randomUUID()}`);
     mkdirSync(join(tempDir, 'learn', 'audit'), { recursive: true });
+    process.env.LEARNING_LOOP_WORKSPACE = tempDir;
   });
 
   afterEach(() => {
+    delete process.env.LEARNING_LOOP_WORKSPACE;
     rmSync(tempDir, { recursive: true, force: true });
   });
 

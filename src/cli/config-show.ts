@@ -4,6 +4,8 @@
 
 import { loadConfig, type LoaderOptions } from '../config/loader.js';
 import type { LearnConfig } from '../config/schema.js';
+import { join } from 'node:path';
+import { resolveWorkspace } from './workspace-resolver.js';
 
 export interface ConfigShowRunOptions {
   argv: string[];
@@ -42,7 +44,8 @@ export async function runConfigShow(opts: ConfigShowRunOptions): Promise<ConfigS
 
   let config: LearnConfig;
   try {
-    config = loadConfig();
+    const { workspace } = resolveWorkspace({ cwd: process.cwd(), env: process.env });
+    config = loadConfig({ projectConfigPath: join(workspace, 'learn', 'config.yaml') });
   } catch (e) {
     err(`error: failed to load config: ${(e as Error).message}\n`);
     return { exitCode: 1, message: 'load failed' };

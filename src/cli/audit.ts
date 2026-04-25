@@ -4,6 +4,7 @@
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveWorkspace } from './workspace-resolver.js';
 
 export interface AuditRunOptions {
   argv: string[];
@@ -70,7 +71,8 @@ export async function runAudit(opts: AuditRunOptions): Promise<AuditResult> {
     return { exitCode: 0 };
   }
 
-  const auditDir = join(cwd, 'learn', 'audit');
+  const { workspace } = resolveWorkspace({ cwd, env: process.env });
+  const auditDir = join(workspace, 'learn', 'audit');
 
   switch (sub) {
     case 'list':

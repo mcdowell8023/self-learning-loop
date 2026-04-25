@@ -24,6 +24,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { resolveWorkspace } from './workspace-resolver.js';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { openCandidateStore } from '../store/candidate-store.js';
@@ -119,9 +120,11 @@ export async function runInit(opts: InitRunOptions): Promise<InitResult> {
     return { exitCode: 0 };
   }
 
-  const workspace = parsed.workspaceFlag
-    ? (isAbsolute(parsed.workspaceFlag) ? parsed.workspaceFlag : join(cwd, parsed.workspaceFlag))
-    : cwd;
+  const { workspace } = resolveWorkspace({
+    workspaceFlag: parsed.workspaceFlag,
+    cwd,
+    env: process.env,
+  });
 
   const learnDir = join(workspace, 'learn');
   const dbPath = join(learnDir, 'candidates.db');

@@ -6,6 +6,7 @@ import { openCandidateStore, type CandidateStore } from '../store/candidate-stor
 import type { Candidate } from '../kernel/types.js';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { resolveWorkspace } from './workspace-resolver.js';
 
 export interface ReviewRunOptions {
   argv: string[];
@@ -41,7 +42,8 @@ export async function runReview(opts: ReviewRunOptions): Promise<ReviewResult> {
     return { exitCode: 0 };
   }
 
-  const dbPath = join(cwd, 'learn', 'candidates.db');
+  const { workspace } = resolveWorkspace({ cwd, env: process.env });
+  const dbPath = join(workspace, 'learn', 'candidates.db');
   const store = opts.store ?? (existsSync(dbPath)
     ? openCandidateStore({ dbPath, defaultActor: 'system' })
     : null);

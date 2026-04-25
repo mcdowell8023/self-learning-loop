@@ -34,6 +34,7 @@
 
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
+import { resolveWorkspace } from './workspace-resolver.js';
 import { randomUUID } from 'node:crypto';
 
 import { removeMarkerBlock } from '../graduation/marker-block.js';
@@ -122,7 +123,11 @@ export async function runOverride(opts: OverrideRunOptions): Promise<OverrideRes
 
   const { command, candidateId, reason, dbFlag, workspaceFlag, actor } = parsed;
 
-  const workspace = resolvePath(workspaceFlag ?? cwd, cwd);
+  const { workspace } = resolveWorkspace({
+    workspaceFlag: workspaceFlag,
+    cwd,
+    env: process.env,
+  });
   const dbPath = dbFlag
     ? resolvePath(dbFlag, cwd)
     : join(workspace, 'learn', 'candidates.db');

@@ -47,6 +47,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode)    MODE="$2"; shift 2 ;;
     --runtime) RUNTIME="$2"; shift 2 ;;
+    --update)  MODE="local"; shift ;;  # --update is an alias for --mode local (re-copies metadata)
     --dry-run) DRY_RUN=true; shift ;;
     -h|--help) usage ;;
     *) err "Unknown option: $1"; usage ;;
@@ -164,11 +165,49 @@ make_link() {
 # ─── Install: mode local ────────────────────────────
 install_local() {
   local rt="$1"
-  info "Installing (local) for runtime: $rt"
-  local skill_link
-  skill_link="$(get_skill_link_target "$rt")"
-  make_dir "$(dirname "$skill_link")"
-  make_link "$REPO_DIR" "$skill_link"
+  info "Installing (local/copy) for runtime: $rt"
+  local skill_dir
+  skill_dir="$(get_skill_link_target "$rt")"
+
+  # Remove old symlink if present
+  if [[ -L "$skill_dir" ]]; then
+    if $DRY_RUN; then
+      dry "rm $skill_dir (old symlink)"
+    else
+      rm "$skill_dir"
+      info "Removed old symlink: $skill_dir"
+    fi
+  fi
+
+  # Create skill directory structure and copy metadata
+  make_dir "$skill_dir"
+  make_dir "$skill_dir/references"
+  make_dir "$skill_dir/bin"
+
+  if $DRY_RUN; then
+    dry "cp $REPO_DIR/SKILL.md → $skill_dir/SKILL.md"
+    dry "cp $REPO_DIR/references/*.md → $skill_dir/references/"
+    dry "create $skill_dir/bin/learn.sh wrapper"
+  else
+    # Copy SKILL.md
+    cp "$REPO_DIR/SKILL.md" "$skill_dir/SKILL.md"
+    ok "Copied SKILL.md"
+
+    # Copy references/
+    if [[ -d "$REPO_DIR/references" ]]; then
+      cp "$REPO_DIR/references/"*.md "$skill_dir/references/" 2>/dev/null || true
+      ok "Copied references/ ($(ls "$skill_dir/references/" | wc -l) files)"
+    fi
+
+    # Create bin/learn.sh wrapper
+    local cli_path="$HOME_DIR/.local/bin/$BIN_NAME"
+    cat > "$skill_dir/bin/learn.sh" <<WRAPPER
+#!/bin/sh
+exec "$cli_path" "\$@"
+WRAPPER
+    chmod +x "$skill_dir/bin/learn.sh"
+    ok "Created bin/learn.sh wrapper → $cli_path"
+  fi
 
   local data_dir
   data_dir="$(get_data_dir "$rt")"

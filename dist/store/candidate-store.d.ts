@@ -33,6 +33,8 @@ export interface CandidateStoreOptions {
     migrationsDir?: string;
     /** 创建时的默认 actor（transition 日志用），默认 'system'。 */
     defaultActor?: TransitionActor;
+    /** §5.6.2 文件镜像目录。设置后每次状态变更自动写镜像。 */
+    candidatesDir?: string;
 }
 export interface CreateCandidateInput {
     strategy: Strategy;
@@ -62,9 +64,12 @@ export interface TransitionOptions {
 export declare class CandidateStore {
     private db;
     private readonly defaultActor;
+    private readonly candidatesDir;
     constructor(opts: CandidateStoreOptions);
     private runMigrations;
     close(): void;
+    /** §5.6.2 尽力而为写镜像（失败只 warn，不回滚 SQLite） */
+    private tryWriteMirror;
     /** 暴露底层 DB（测试专用）。 */
     _unsafeDb(): BetterSqliteDatabase;
     /** PRAGMA journal_mode 的实际值（测试用） */

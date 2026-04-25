@@ -15,6 +15,7 @@ import { runInit } from './init.js';
 import { runStatus } from './status.js';
 import { runOverride } from './override.js';
 import { runReflect } from './reflect.js';
+import { runRepair } from './repair.js';
 import { reloadConfig, loadConfig } from '../config/loader.js';
 
 const TOP_USAGE = [
@@ -28,6 +29,7 @@ const TOP_USAGE = [
   '  reflect              Run a reflection pass (analyse memory, generate candidates).',
   '  override <sub> ...     Force-graduate / force-retire a candidate (§5.2.2 rules #12/#13).',
   '  config reload          Reload config.yaml (hot reload with double-buffer).',
+  '  repair [--dry-run] [--scope <s>]  Repair missing/stale candidate file mirrors.',
   '  help, -h, --help       Show this help.',
   '',
   'Run `openclaw-learn <command> --help` for command-specific help.',
@@ -76,6 +78,10 @@ export async function runLearn(opts: LearnRunOptions): Promise<LearnResult> {
     case 'reflect': {
       const r = await runReflect({ argv: rest, cwd, stdout: out, stderr: err });
       return { exitCode: r.exitCode, command: 'reflect', subResult: r };
+    }
+    case 'repair': {
+      const r = await runRepair({ argv: rest, cwd, stdout: out, stderr: err });
+      return { exitCode: r.exitCode, command: 'repair', subResult: r };
     }
     case 'config': {
       return runConfigGroup(rest, { out, err, cwd });

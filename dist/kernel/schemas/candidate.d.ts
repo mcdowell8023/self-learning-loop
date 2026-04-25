@@ -38,21 +38,21 @@ export declare const StrategySchema: z.ZodObject<{
     /** Associated Instance IDs. */
     instance_ids: z.ZodArray<z.ZodString, "many">;
 }, "strip", z.ZodTypeAny, {
-    created_at: string;
-    strategy_id: string;
     problem_category: string;
+    strategy_id: string;
+    scope: string;
+    created_at: string;
     trigger_conditions: string;
     recommended_action: string;
-    scope: string;
     instance_ids: string[];
     tags?: string[] | undefined;
 }, {
-    created_at: string;
-    strategy_id: string;
     problem_category: string;
+    strategy_id: string;
+    scope: string;
+    created_at: string;
     trigger_conditions: string;
     recommended_action: string;
-    scope: string;
     instance_ids: string[];
     tags?: string[] | undefined;
 }>;
@@ -202,8 +202,9 @@ export declare const InstanceSchema: z.ZodObject<{
         command_allowlist?: string[] | undefined;
         sandbox_profile?: string | undefined;
     }[];
-    created_at: string;
     strategy_id: string;
+    created_at: string;
+    trial_results: Record<string, unknown>[];
     instance_id: string;
     diff_summary: string;
     files_touched: string[];
@@ -212,7 +213,6 @@ export declare const InstanceSchema: z.ZodObject<{
         runtime: string;
         session_id: string;
     }[];
-    trial_results: Record<string, unknown>[];
 }, {
     env_fingerprint: {
         runtime: string;
@@ -231,8 +231,9 @@ export declare const InstanceSchema: z.ZodObject<{
         command_allowlist?: string[] | undefined;
         sandbox_profile?: string | undefined;
     }[];
-    created_at: string;
     strategy_id: string;
+    created_at: string;
+    trial_results: Record<string, unknown>[];
     instance_id: string;
     diff_summary: string;
     files_touched: string[];
@@ -241,7 +242,6 @@ export declare const InstanceSchema: z.ZodObject<{
         runtime: string;
         session_id: string;
     }[];
-    trial_results: Record<string, unknown>[];
 }>;
 export type Instance = z.infer<typeof InstanceSchema>;
 /** Full candidate record as persisted in SQLite. */
@@ -274,21 +274,21 @@ export declare const CandidateSchema: z.ZodObject<{
             /** Associated Instance IDs. */
             instance_ids: z.ZodArray<z.ZodString, "many">;
         }, "strip", z.ZodTypeAny, {
-            created_at: string;
-            strategy_id: string;
             problem_category: string;
+            strategy_id: string;
+            scope: string;
+            created_at: string;
             trigger_conditions: string;
             recommended_action: string;
-            scope: string;
             instance_ids: string[];
             tags?: string[] | undefined;
         }, {
-            created_at: string;
-            strategy_id: string;
             problem_category: string;
+            strategy_id: string;
+            scope: string;
+            created_at: string;
             trigger_conditions: string;
             recommended_action: string;
-            scope: string;
             instance_ids: string[];
             tags?: string[] | undefined;
         }>;
@@ -392,8 +392,9 @@ export declare const CandidateSchema: z.ZodObject<{
                 command_allowlist?: string[] | undefined;
                 sandbox_profile?: string | undefined;
             }[];
-            created_at: string;
             strategy_id: string;
+            created_at: string;
+            trial_results: Record<string, unknown>[];
             instance_id: string;
             diff_summary: string;
             files_touched: string[];
@@ -402,7 +403,6 @@ export declare const CandidateSchema: z.ZodObject<{
                 runtime: string;
                 session_id: string;
             }[];
-            trial_results: Record<string, unknown>[];
         }, {
             env_fingerprint: {
                 runtime: string;
@@ -421,8 +421,9 @@ export declare const CandidateSchema: z.ZodObject<{
                 command_allowlist?: string[] | undefined;
                 sandbox_profile?: string | undefined;
             }[];
-            created_at: string;
             strategy_id: string;
+            created_at: string;
+            trial_results: Record<string, unknown>[];
             instance_id: string;
             diff_summary: string;
             files_touched: string[];
@@ -431,16 +432,15 @@ export declare const CandidateSchema: z.ZodObject<{
                 runtime: string;
                 session_id: string;
             }[];
-            trial_results: Record<string, unknown>[];
         }>, "many">;
     }, "strip", z.ZodTypeAny, {
         strategy: {
-            created_at: string;
-            strategy_id: string;
             problem_category: string;
+            strategy_id: string;
+            scope: string;
+            created_at: string;
             trigger_conditions: string;
             recommended_action: string;
-            scope: string;
             instance_ids: string[];
             tags?: string[] | undefined;
         };
@@ -462,8 +462,9 @@ export declare const CandidateSchema: z.ZodObject<{
                 command_allowlist?: string[] | undefined;
                 sandbox_profile?: string | undefined;
             }[];
-            created_at: string;
             strategy_id: string;
+            created_at: string;
+            trial_results: Record<string, unknown>[];
             instance_id: string;
             diff_summary: string;
             files_touched: string[];
@@ -472,16 +473,15 @@ export declare const CandidateSchema: z.ZodObject<{
                 runtime: string;
                 session_id: string;
             }[];
-            trial_results: Record<string, unknown>[];
         }[];
     }, {
         strategy: {
-            created_at: string;
-            strategy_id: string;
             problem_category: string;
+            strategy_id: string;
+            scope: string;
+            created_at: string;
             trigger_conditions: string;
             recommended_action: string;
-            scope: string;
             instance_ids: string[];
             tags?: string[] | undefined;
         };
@@ -503,8 +503,9 @@ export declare const CandidateSchema: z.ZodObject<{
                 command_allowlist?: string[] | undefined;
                 sandbox_profile?: string | undefined;
             }[];
-            created_at: string;
             strategy_id: string;
+            created_at: string;
+            trial_results: Record<string, unknown>[];
             instance_id: string;
             diff_summary: string;
             files_touched: string[];
@@ -513,7 +514,6 @@ export declare const CandidateSchema: z.ZodObject<{
                 runtime: string;
                 session_id: string;
             }[];
-            trial_results: Record<string, unknown>[];
         }[];
     }>;
     /** Created timestamp. */
@@ -524,12 +524,12 @@ export declare const CandidateSchema: z.ZodObject<{
     candidate_id: string;
     data: {
         strategy: {
-            created_at: string;
-            strategy_id: string;
             problem_category: string;
+            strategy_id: string;
+            scope: string;
+            created_at: string;
             trigger_conditions: string;
             recommended_action: string;
-            scope: string;
             instance_ids: string[];
             tags?: string[] | undefined;
         };
@@ -551,8 +551,9 @@ export declare const CandidateSchema: z.ZodObject<{
                 command_allowlist?: string[] | undefined;
                 sandbox_profile?: string | undefined;
             }[];
-            created_at: string;
             strategy_id: string;
+            created_at: string;
+            trial_results: Record<string, unknown>[];
             instance_id: string;
             diff_summary: string;
             files_touched: string[];
@@ -561,24 +562,23 @@ export declare const CandidateSchema: z.ZodObject<{
                 runtime: string;
                 session_id: string;
             }[];
-            trial_results: Record<string, unknown>[];
         }[];
     };
+    strategy_id: string;
     state: "graduated" | "retired" | "dormant" | "pending" | "reviewing" | "validating" | "conflict" | "rejected";
     created_at: string;
     updated_at: string;
-    strategy_id: string;
     dormant_reason?: "inconclusive" | "no_match" | null | undefined;
 }, {
     candidate_id: string;
     data: {
         strategy: {
-            created_at: string;
-            strategy_id: string;
             problem_category: string;
+            strategy_id: string;
+            scope: string;
+            created_at: string;
             trigger_conditions: string;
             recommended_action: string;
-            scope: string;
             instance_ids: string[];
             tags?: string[] | undefined;
         };
@@ -600,8 +600,9 @@ export declare const CandidateSchema: z.ZodObject<{
                 command_allowlist?: string[] | undefined;
                 sandbox_profile?: string | undefined;
             }[];
-            created_at: string;
             strategy_id: string;
+            created_at: string;
+            trial_results: Record<string, unknown>[];
             instance_id: string;
             diff_summary: string;
             files_touched: string[];
@@ -610,13 +611,12 @@ export declare const CandidateSchema: z.ZodObject<{
                 runtime: string;
                 session_id: string;
             }[];
-            trial_results: Record<string, unknown>[];
         }[];
     };
+    strategy_id: string;
     state: "graduated" | "retired" | "dormant" | "pending" | "reviewing" | "validating" | "conflict" | "rejected";
     created_at: string;
     updated_at: string;
-    strategy_id: string;
     dormant_reason?: "inconclusive" | "no_match" | null | undefined;
 }>;
 export type Candidate = z.infer<typeof CandidateSchema>;

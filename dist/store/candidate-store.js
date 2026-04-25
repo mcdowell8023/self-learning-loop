@@ -6,6 +6,7 @@ import { readFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
+import { writeMirror } from './candidate-mirror.js';
 // ---------------------------------------------------------------------------
 // 错误类型
 // ---------------------------------------------------------------------------
@@ -66,8 +67,10 @@ function defaultMigrationsDir() {
 export class CandidateStore {
     db;
     defaultActor;
+    candidatesDir;
     constructor(opts) {
         this.defaultActor = opts.defaultActor ?? 'system';
+        this.candidatesDir = opts.candidatesDir ?? null;
         if (opts.dbPath !== ':memory:') {
             const dir = dirname(opts.dbPath);
             if (dir && !existsSync(dir))
@@ -93,6 +96,17 @@ export class CandidateStore {
     }
     close() {
         this.db.close();
+    }
+    /** §5.6.2 尽力而为写镜像（失败只 warn，不回滚 SQLite） */
+    tryWriteMirror(candidate) {
+        if (!this.candidatesDir)
+            return;
+        try {
+            writeMirror(this.candidatesDir, candidate);
+        }
+        catch {
+            // §5.6 一致性策略：文件写入失败不回滚 SQLite
+        }
     }
     /** 暴露底层 DB（测试专用）。 */
     _unsafeDb() {
@@ -143,7 +157,9 @@ export class CandidateStore {
             }
         });
         tx();
-        return this.get(candidateId);
+        const created = this.get(candidateId);
+        this.tryWriteMirror(created);
+        return created;
     }
     insertInstance(inst) {
         this.db.prepare(`
@@ -168,7 +184,9 @@ export class CandidateStore {
             this.touch(candidateId);
         });
         tx();
-        return this.get(candidateId);
+        const updated = this.get(candidateId);
+        this.tryWriteMirror(updated);
+        return updated;
     }
     get(candidateId) {
         const stateRow = this.db.prepare(`
@@ -212,7 +230,9 @@ export class CandidateStore {
             this.touch(candidateId);
         });
         tx();
-        return this.get(candidateId);
+        const updated = this.get(candidateId);
+        this.tryWriteMirror(updated);
+        return updated;
     }
     delete(candidateId) {
         const info = this.db.prepare(`DELETE FROM candidate_state WHERE candidate_id = ?`).run(candidateId);
@@ -362,7 +382,9 @@ export class CandidateStore {
       `).run(candidateId, fromState, toState, action, actor, newDormantReason ?? row.dormant_reason ?? null, now);
         });
         run();
-        return this.get(candidateId);
+        const transitioned = this.get(candidateId);
+        this.tryWriteMirror(transitioned);
+        return transitioned;
     }
     /** 返回某候选的状态转移历史（审计用） */
     getTransitions(candidateId) {

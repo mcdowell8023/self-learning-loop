@@ -16,6 +16,7 @@ import type {
   Instance,
   Strategy,
 } from '../kernel/types.js';
+import { writeMirror } from './candidate-mirror.js';
 
 // ---------------------------------------------------------------------------
 // 错误类型
@@ -97,6 +98,8 @@ export interface CandidateStoreOptions {
   migrationsDir?: string;
   /** 创建时的默认 actor（transition 日志用），默认 'system'。 */
   defaultActor?: TransitionActor;
+  /** §5.6.2 文件镜像目录。设置后每次状态变更自动写镜像。 */
+  candidatesDir?: string;
 }
 
 export interface CreateCandidateInput {
@@ -140,9 +143,11 @@ function defaultMigrationsDir(): string {
 export class CandidateStore {
   private db: BetterSqliteDatabase;
   private readonly defaultActor: TransitionActor;
+  private readonly candidatesDir: string | null;
 
   constructor(opts: CandidateStoreOptions) {
     this.defaultActor = opts.defaultActor ?? 'system';
+    this.candidatesDir = opts.candidatesDir ?? null;
 
     if (opts.dbPath !== ':memory:') {
       const dir = dirname(opts.dbPath);
@@ -172,6 +177,16 @@ export class CandidateStore {
 
   close(): void {
     this.db.close();
+  }
+
+  /** §5.6.2 尽力而为写镜像（失败只 warn，不回滚 SQLite） */
+  private tryWriteMirror(candidate: Candidate): void {
+    if (!this.candidatesDir) return;
+    try {
+      writeMirror(this.candidatesDir, candidate);
+    } catch {
+      // §5.6 一致性策略：文件写入失败不回滚 SQLite
+    }
   }
 
   /** 暴露底层 DB（测试专用）。 */
@@ -245,7 +260,9 @@ export class CandidateStore {
     });
 
     tx();
-    return this.get(candidateId)!;
+    const created = this.get(candidateId)!;
+    this.tryWriteMirror(created);
+    return created;
   }
 
   private insertInstance(inst: Instance): void {
@@ -284,7 +301,9 @@ export class CandidateStore {
       this.touch(candidateId);
     });
     tx();
-    return this.get(candidateId)!;
+    const updated = this.get(candidateId)!;
+    this.tryWriteMirror(updated);
+    return updated;
   }
 
   get(candidateId: string): Candidate | null {
@@ -357,7 +376,9 @@ export class CandidateStore {
       this.touch(candidateId);
     });
     tx();
-    return this.get(candidateId)!;
+    const updated = this.get(candidateId)!;
+    this.tryWriteMirror(updated);
+    return updated;
   }
 
   delete(candidateId: string): boolean {
@@ -557,7 +578,9 @@ export class CandidateStore {
     });
 
     run();
-    return this.get(candidateId)!;
+    const transitioned = this.get(candidateId)!;
+    this.tryWriteMirror(transitioned);
+    return transitioned;
   }
 
   /** 返回某候选的状态转移历史（审计用） */

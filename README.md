@@ -1,6 +1,6 @@
-# @openclaw/learning-loop
+# @openclaw/self-learning-loop (v1.1)
 
-OpenClaw Learning Loop — Phase 1a. Reflects on daily diary notes, generates improvement candidates, and manages their lifecycle.
+OpenClaw Self-Learning Loop — v1.1. Reflects on daily diary notes, generates improvement candidates, and manages their lifecycle.
 
 ## Quick Start
 

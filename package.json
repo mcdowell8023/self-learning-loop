@@ -1,6 +1,6 @@
 {
-  "name": "@openclaw/learning-loop",
-  "version": "0.1.0-p1a",
+  "name": "@openclaw/self-learning-loop",
+  "version": "1.1.0-alpha.1",
   "private": true,
   "type": "module",
   "description": "OpenClaw Learning Loop — Phase 1a (T-P1a-003 Candidate Store)",

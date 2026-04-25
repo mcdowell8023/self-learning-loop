@@ -159,10 +159,9 @@ scripts/
 
 references/
   architecture.md     ← Detailed system design
-  cli-reference.md    ← Full CLI documentation
+  triggers.md         ← CLI commands + trigger conditions + cron setup
   customization.md    ← All configuration options
   runtime-integration.md ← Runtime adapter details
-  triggers.md         ← Trigger conditions and cron setup
 ```
 
 ## Automation (Cron)

@@ -22,7 +22,7 @@ First public alpha. Complete rewrite from P1a baseline with cross-runtime suppor
 - `setup.sh` and `uninstall.sh` with `--mode local|global` and `--dry-run`
 - Candidate Store: SQLite database + markdown file mirror (under `learn/candidates/YYYY-MM-DD/`)
 - Daily reflect cron registration (`scripts/register-cron.sh`)
-- Test suite: 389 passing across 26 test files
+- Test suite: 390 passing across 26 test files
 - SKILL.md + 4 reference docs (architecture, CLI reference, customization, triggers)
 - QUICKSTART.md end-user guide
 

@@ -7,7 +7,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
+import { existsSync as fsExistsSync } from 'node:fs';
 import type { RuntimeAdapter } from './base.js';
+import { GenericAdapter } from './generic.js';
 import { OpenClawAdapter } from './openclaw.js';
 
 // ─── Types ──────────────────────────────────────────
@@ -18,9 +20,13 @@ type AdapterFactory = () => RuntimeAdapter;
 
 // ─── Built-in registry ──────────────────────────────
 
+/** Default path for codex YAML mapping. */
+const CODEX_YAML_PATH = join(homedir(), 'open-claw-output/code/learning-loop/configs/adapters/codex.yaml');
+
 const builtinFactories = new Map<RuntimeId, AdapterFactory>([
   ['openclaw', () => new OpenClawAdapter()],
-  // claude-code, opencode, generic — stub factories; real implementations in future tickets
+  ['codex', () => new GenericAdapter(CODEX_YAML_PATH)],
+  // claude-code, opencode — stub factories; real implementations in future tickets
 ]);
 
 // ─── Three-tier discovery paths ─────────────────────

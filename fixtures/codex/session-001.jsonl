@@ -1,0 +1,6 @@
+{"session_id":"codex-sess-001","id":"msg-001","role":"human","content":"Explain the module system","ts":"2026-04-25T14:00:00Z","type":"message"}
+{"session_id":"codex-sess-001","id":"msg-002","role":"bot","content":"Node.js has two module systems: CommonJS and ESM...","ts":"2026-04-25T14:00:05Z","type":"message"}
+{"session_id":"codex-sess-001","id":"msg-003","role":"bot","content":"Reading package.json...","ts":"2026-04-25T14:00:10Z","type":"tool_call"}
+{"session_id":"codex-sess-001","id":"msg-004","role":"system","content":"{\"name\":\"my-app\",\"type\":\"module\"}","ts":"2026-04-25T14:00:11Z","type":"tool_result"}
+{"session_id":"codex-sess-001","id":"msg-005","role":"bot","content":"Your project uses ESM (type: module).","ts":"2026-04-25T14:00:15Z","type":"message"}
+{"session_id":"codex-sess-001","id":"msg-006","role":"human","content":"Thanks!","ts":"2026-04-25T14:00:20Z","type":"message"}

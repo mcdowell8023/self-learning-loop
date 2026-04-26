@@ -141,12 +141,32 @@ export class GenericAdapter implements RuntimeAdapter {
         continue; // skip malformed lines
       }
 
-      const role = fm ? String(extractField(record, fm.role) ?? 'unknown') : 'unknown';
+      let role = fm ? String(extractField(record, fm.role) ?? 'unknown') : 'unknown';
       const content = fm ? String(extractField(record, fm.content) ?? '') : JSON.stringify(record);
       const tsRaw = fm?.timestamp ? extractField(record, fm.timestamp) : undefined;
-      const timestamp = tsRaw ? new Date(String(tsRaw)) : new Date();
 
-      const eventType = role === 'user' ? 'user_message'
+      // Apply transforms
+      const transforms = this.mapping.transforms;
+      if (transforms?.role_map && role in transforms.role_map) {
+        role = transforms.role_map[role];
+      }
+
+      let timestamp: Date;
+      if (tsRaw == null) {
+        timestamp = new Date();
+      } else if (transforms?.timestamp_format === 'epoch_ms') {
+        timestamp = new Date(Number(tsRaw));
+      } else if (transforms?.timestamp_format === 'epoch_s') {
+        timestamp = new Date(Number(tsRaw) * 1000);
+      } else {
+        timestamp = new Date(String(tsRaw));
+      }
+
+      const partType = fm?.part_type ? String(extractField(record, fm.part_type) ?? '') : '';
+
+      const eventType = partType === 'tool_call' ? 'tool_call'
+        : partType === 'tool_result' ? 'tool_result'
+        : role === 'user' ? 'user_message'
         : role === 'assistant' ? 'assistant_message'
         : 'system';
 

@@ -8,11 +8,28 @@ import { z } from 'zod';
 /** Supported session file formats. */
 export const SessionFormatSchema = z.enum(['jsonl', 'sqlite', 'yaml', 'json']);
 
+/** Role mapping — transform runtime-specific role names to standard names. */
+export const RoleMapSchema = z.record(z.string()).optional().describe(
+  'Map runtime role names to standard names (e.g. human→user, bot→assistant)',
+);
+
+/** Transform rules for field values. */
+export const TransformSchema = z.object({
+  /** Map raw role strings to standard role names. */
+  role_map: RoleMapSchema,
+
+  /** strftime-compatible format hint for parsing timestamps (informational). */
+  timestamp_format: z.string().optional().describe('Hint for timestamp parsing (e.g. iso8601, epoch_ms)'),
+}).passthrough().optional();
+
 /** Field mapping — JSONPath-like expressions for extracting standard fields. */
 export const FieldMappingSchema = z.object({
+  session_id: z.string().optional().describe('JSONPath to session ID field'),
+  message_id: z.string().optional().describe('JSONPath to message/event ID field'),
   role: z.string().describe('JSONPath to role field'),
   content: z.string().describe('JSONPath to content field'),
   timestamp: z.string().optional().describe('JSONPath to timestamp field'),
+  part_type: z.string().optional().describe('JSONPath to part/event type field'),
 }).passthrough();
 
 /** Event extractor configuration. */
@@ -40,6 +57,9 @@ export const GenericMappingSchema = z.object({
 
   /** Event extractor configuration. */
   event_extractor: EventExtractorSchema.optional(),
+
+  /** Transform rules for field values. */
+  transforms: TransformSchema,
 
   /** Free-form notes (not used at runtime). */
   notes: z.string().optional(),

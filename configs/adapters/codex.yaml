@@ -1,0 +1,36 @@
+# GenericAdapter YAML mapping for Codex runtime.
+# Place in configs/adapters/ and load via: new GenericAdapter('configs/adapters/codex.yaml')
+
+runtime_id: codex
+
+workspace_paths:
+  - ~/.codex/sessions
+  - ~/.codex
+
+session_format: jsonl
+session_glob: "**/*.jsonl"
+
+field_mapping:
+  session_id: $.session_id
+  message_id: $.id
+  role: $.role
+  content: $.content
+  timestamp: $.ts
+  part_type: $.type
+
+transforms:
+  role_map:
+    human: user
+    bot: assistant
+    system: system
+    tool: assistant
+  timestamp_format: iso8601
+
+event_extractor:
+  type: jsonpath
+
+notes: |
+  Codex runtime session log format (as of 2026-04):
+  Each line is a JSON object with fields: session_id, id, role, content, ts, type.
+  Role names differ from standard: "human" → "user", "bot" → "assistant".
+  Timestamp is ISO 8601 string.

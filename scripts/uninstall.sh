@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # uninstall.sh — Remove @openclaw/self-learning-loop installation
+#
+# By default, all data is removed. Use --keep-data to preserve.
 set -euo pipefail
 
 HOME_DIR="${HOME:-$(eval echo ~)}"
@@ -17,6 +19,11 @@ FORCE=false
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
+
+Remove @openclaw/self-learning-loop installation.
+
+By default, all data is removed. Use --keep-data to preserve
+data directories (candidates, audit, SQLite).
 
 Options:
   --dry-run       Print actions without executing
@@ -37,82 +44,118 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-remove_link() {
+remove_path() {
   local path="$1"
   if [[ -L "$path" ]]; then
     if $DRY_RUN; then
-      echo -e "${YELLOW}[dry-run]${NC} rm $path"
+      echo -e "${YELLOW}[dry-run]${NC} rm $path (symlink)"
     else
       rm "$path"
       ok "Removed symlink: $path"
     fi
-  elif [[ -e "$path" ]]; then
-    warn "$path exists but is not a symlink — skipping"
-  fi
-}
-
-remove_dir() {
-  local path="$1"
-  if [[ -d "$path" ]]; then
+  elif [[ -d "$path" ]]; then
     if $DRY_RUN; then
-      echo -e "${YELLOW}[dry-run]${NC} rm -rf $path"
+      echo -e "${YELLOW}[dry-run]${NC} rm -rf $path (directory)"
     else
       rm -rf "$path"
       ok "Removed directory: $path"
     fi
+  elif [[ -f "$path" ]]; then
+    if $DRY_RUN; then
+      echo -e "${YELLOW}[dry-run]${NC} rm $path (file)"
+    else
+      rm "$path"
+      ok "Removed file: $path"
+    fi
   fi
 }
 
-# ─── Confirmation ────────────────────────────────────
-if ! $FORCE && ! $DRY_RUN; then
-  echo -e "${YELLOW}This will remove self-learning-loop symlinks and CLI registration.${NC}"
-  read -rp "Continue? [y/N] " answer
-  if [[ "${answer,,}" != "y" ]]; then
-    echo "Aborted."
-    exit 0
-  fi
-  if ! $KEEP_DATA; then
-    echo ""
-    read -rp "Also remove data directories (candidates, audit, SQLite)? [y/N] " data_answer
-    if [[ "${data_answer,,}" != "y" ]]; then
-      KEEP_DATA=true
-      info "Data directories will be preserved."
-    fi
-  fi
-fi
-
-info "=== Uninstalling @openclaw/self-learning-loop ==="
-$DRY_RUN && info "*** DRY-RUN MODE ***"
-echo ""
-
-# ─── Remove skill symlinks ──────────────────────────
-SKILL_LINKS=(
+# ─── Collect all paths to remove ─────────────────────
+SKILL_PATHS=(
   "$HOME_DIR/.openclaw/workspace/skills/self-learning-loop"
   "$HOME_DIR/.claude/skills/self-learning-loop"
   "$HOME_DIR/.local/share/opencode/skills/self-learning-loop"
   "${CODEX_SKILL_PATH:-$HOME_DIR/.codex/skills/self-learning-loop}"
 )
 
-for link in "${SKILL_LINKS[@]}"; do
-  if [[ -L "$link" ]]; then
-    remove_link "$link"
-  elif [[ -d "$link" ]]; then
-    remove_dir "$link"
+BIN_PATH="$HOME_DIR/.local/bin/$BIN_NAME"
+SHARE_LINK="$HOME_DIR/.local/share/openclaw-learn"
+
+DATA_PATHS=(
+  "$HOME_DIR/.openclaw/learn"
+  "$HOME_DIR/.claude/learn"
+  "$HOME_DIR/.local/share/opencode/learn"
+  "${CODEX_DATA_PATH:-$HOME_DIR/.codex/learn}"
+  "$HOME_DIR/.local/share/openclaw-learn/data"
+  # Legacy paths (pre-v1.1-alpha.2): clean up if present
+  "$HOME_DIR/.openclaw/workspace/learning-loop"
+  "$HOME_DIR/.claude/learning-loop"
+  "$HOME_DIR/.local/share/opencode/learning-loop"
+  "${CODEX_DATA_PATH:-$HOME_DIR/.codex/learning-loop}"
+  "$HOME_DIR/.openclaw/workspace/learn"
+)
+
+# ─── Safety check on data paths ─────────────────────
+validate_data_path() {
+  local path="$1"
+  local resolved
+  resolved="$(realpath -m "$path" 2>/dev/null || echo "$path")"
+  if [[ "$resolved" == "$HOME_DIR" || "$resolved" == "/" || "$resolved" == "/home" ]]; then
+    warn "REFUSING to delete $path — resolves to $resolved (safety check)"
+    return 1
   fi
+  return 0
+}
+
+# ─── Print "Will remove" summary ─────────────────────
+print_will_remove() {
+  echo ""
+  info "Will remove:"
+  for p in "${SKILL_PATHS[@]}"; do
+    [[ -e "$p" || -L "$p" ]] && echo "  [skill]  $p"
+  done
+  [[ -e "$BIN_PATH" || -L "$BIN_PATH" ]] && echo "  [cli]    $BIN_PATH"
+  [[ -e "$SHARE_LINK" || -L "$SHARE_LINK" ]] && echo "  [share]  $SHARE_LINK"
+  if ! $KEEP_DATA; then
+    for p in "${DATA_PATHS[@]}"; do
+      if [[ -e "$p" || -L "$p" ]]; then
+        echo "  [data]   $p"
+      fi
+    done
+  fi
+  echo ""
+}
+
+# ─── Confirmation ────────────────────────────────────
+if ! $FORCE && ! $DRY_RUN; then
+  echo -e "${YELLOW}This will remove self-learning-loop skill files and CLI registration.${NC}"
+  if ! $KEEP_DATA; then
+    echo -e "${YELLOW}All data (candidates, audit, SQLite) will also be removed.${NC}"
+    echo -e "${YELLOW}Use --keep-data to preserve data directories.${NC}"
+  fi
+  print_will_remove
+  read -rp "Continue? [y/N] " answer
+  if [[ "${answer,,}" != "y" ]]; then
+    echo "Aborted."
+    exit 0
+  fi
+fi
+
+info "=== Uninstalling @openclaw/self-learning-loop ==="
+$DRY_RUN && info "*** DRY-RUN MODE ***"
+print_will_remove
+
+# ─── Remove skill directories/symlinks ───────────────
+for path in "${SKILL_PATHS[@]}"; do
+  remove_path "$path"
 done
 
 # Global share link
-remove_link "$HOME_DIR/.local/share/openclaw-learn"
+remove_path "$SHARE_LINK"
 
 # ─── Remove CLI bin ──────────────────────────────────
-BIN_PATH="$HOME_DIR/.local/bin/$BIN_NAME"
 if [[ -f "$BIN_PATH" || -L "$BIN_PATH" ]]; then
-  if $DRY_RUN; then
-    echo -e "${YELLOW}[dry-run]${NC} rm $BIN_PATH"
-  else
-    rm "$BIN_PATH"
-    ok "Removed CLI: $BIN_PATH"
-  fi
+  remove_path "$BIN_PATH"
 fi
 
 # Try npm unlink too
@@ -129,18 +172,15 @@ fi
 
 # ─── Remove data directories ────────────────────────
 if ! $KEEP_DATA; then
-  DATA_DIRS=(
-    "$HOME_DIR/.openclaw/workspace/learning-loop"
-    "$HOME_DIR/.claude/learning-loop"
-    "$HOME_DIR/.local/share/opencode/learning-loop"
-    "${CODEX_DATA_PATH:-$HOME_DIR/.codex/learning-loop}"
-    "$HOME_DIR/.local/share/openclaw-learn/data"
-  )
-  for dir in "${DATA_DIRS[@]}"; do
-    remove_dir "$dir"
+  for dir in "${DATA_PATHS[@]}"; do
+    if [[ -e "$dir" || -L "$dir" ]]; then
+      if validate_data_path "$dir"; then
+        remove_path "$dir"
+      fi
+    fi
   done
 else
-  info "Data directories preserved."
+  info "Data directories preserved (--keep-data)."
 fi
 
 echo ""

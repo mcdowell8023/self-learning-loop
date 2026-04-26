@@ -33,7 +33,7 @@ else
   WORKSPACE="$PROJECT_DIR"
 fi
 
-AUDIT_DIR="${WORKSPACE}/learning-loop/audit"
+AUDIT_DIR="${WORKSPACE}/learn/audit"
 
 # ── Sum today's tokens from audit JSONL ───────────────────────────
 TOTAL=0

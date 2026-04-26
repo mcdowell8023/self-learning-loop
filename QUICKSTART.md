@@ -26,7 +26,7 @@ bash scripts/setup.sh --mode local
 - 复制 SKILL.md + references/ 到 `~/.openclaw/workspace/skills/self-learning-loop/`
 - 复制到 `~/.local/share/opencode/skills/self-learning-loop/`（如果有 opencode）
 - 注册 CLI 到 `~/.local/bin/openclaw-learn`
-- 在 `~/.openclaw/workspace/learn/` 创建 SQLite + config.yaml + audit log
+- 在 `~/.openclaw/learn/` 创建 SQLite + config.yaml + audit log
 
 **如果想看会做什么但不真做：** 加 `--dry-run`
 
@@ -47,7 +47,7 @@ openclaw skills list 2>&1 | grep self-learning-loop
 # 期望：列出，无 symlink-escape 错误
 
 # 4. 数据目录
-ls ~/.openclaw/workspace/learn/
+ls ~/.openclaw/learn/
 # 期望：audit/  candidates.db  config.yaml
 ```
 
@@ -78,7 +78,7 @@ openclaw-learn reflect --today
 会做：
 1. 扫描今日 session 历史
 2. 调 LLM 提炼 candidate（Strategy + Instance）
-3. 写到 SQLite + 文件镜像（`~/.openclaw/workspace/learn/candidates/`）
+3. 写到 SQLite + 文件镜像（`~/.openclaw/learn/candidates/`）
 4. 状态：`pending`
 
 ### 看候选列表
@@ -152,7 +152,7 @@ Token 预算保护：超过 `daily_token_budget`（默认 50000）会自动跳�
 
 ## 配置
 
-`~/.openclaw/workspace/learn/config.yaml` 是用户配置：
+`~/.openclaw/learn/config.yaml` 是用户配置：
 
 ```yaml
 # 关键字段
@@ -178,10 +178,11 @@ shadow:
 
 ```bash
 bash scripts/uninstall.sh --force
-# 清 skill 注册 + CLI（保留数据）
-
-bash scripts/uninstall.sh --force --no-keep-data
 # 全清（含 SQLite + audit log）
+# 默认删除所有数据，如需保留数据目录加 --keep-data
+
+bash scripts/uninstall.sh --force --keep-data
+# 清 skill 注册 + CLI，保留数据
 ```
 
 ---
@@ -208,7 +209,7 @@ bash scripts/setup.sh --mode local
 如果你 cd 到非 OpenClaw workspace 跑，应该能自动找到。如果还不行：
 
 ```bash
-LEARNING_LOOP_WORKSPACE=~/.openclaw/workspace openclaw-learn status
+LEARNING_LOOP_WORKSPACE=~/.openclaw openclaw-learn status
 ```
 
 ### 问题 3：reflect 调 LLM 失败
@@ -258,8 +259,8 @@ openclaw-learn override revert --candidate <id>
 # 收集诊断信息
 openclaw-learn status > /tmp/learn-status.txt
 openclaw-learn audit --tail 50 > /tmp/learn-audit.txt
-ls -la ~/.openclaw/workspace/learn/ > /tmp/learn-fs.txt
-cat ~/.openclaw/workspace/learn/config.yaml > /tmp/learn-config.txt
+ls -la ~/.openclaw/learn/ > /tmp/learn-fs.txt
+cat ~/.openclaw/learn/config.yaml > /tmp/learn-config.txt
 ```
 
 然后丢给万三让他看。

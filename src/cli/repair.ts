@@ -57,7 +57,7 @@ export async function runRepair(opts: RepairRunOptions): Promise<RepairRunResult
   }
 
   const baseDir = config?.storage?.base_dir?.replace('$WORKSPACE', cwd)
-    ?? join(cwd, '.self-learning-loop');
+    ?? join(cwd, 'learn');
   const dbPath = join(baseDir, 'candidates.db');
   const candidatesDir = config?.storage?.candidates_dir?.replace('$WORKSPACE', cwd)
     ?? join(baseDir, 'candidates');

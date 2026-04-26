@@ -67,8 +67,8 @@ describe('resolveWorkspace', () => {
     expect(result.source).toBe('env-openclaw');
   });
 
-  it('5. auto-detect finds ~/.openclaw/workspace with candidates.db', () => {
-    const target = `${fakeHome}/.openclaw/workspace`;
+  it('5. auto-detect finds ~/.openclaw with candidates.db', () => {
+    const target = `${fakeHome}/.openclaw`;
     (globalThis as any).__mockExistsPaths = (p: string) =>
       p === `${target}/learn/candidates.db`;
 

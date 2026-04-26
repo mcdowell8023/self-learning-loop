@@ -17,6 +17,11 @@ AI agents make the same mistakes over and over because they have no persistent "
 
 Think of it as the **reflect → verify → internalize** cycle that humans do naturally — but automated for your AI agent.
 
+## Prerequisites
+
+- **Node.js ≥ 20.x** (check with `node --version`)
+- npm (comes with Node.js)
+
 ## Quick Start
 
 ```bash
@@ -171,7 +176,7 @@ src/
 
 scripts/
   setup.sh      ← Install skill + CLI to detected runtimes
-  uninstall.sh  ← Clean removal (--no-keep-data for full wipe)
+  uninstall.sh  ← Clean removal (default removes all data; --keep-data to preserve)
   daily-reflect.sh    ← Cron-friendly reflect wrapper
   register-cron.sh    ← Register daily cron job
   check-token-budget.sh ← Check today's token usage

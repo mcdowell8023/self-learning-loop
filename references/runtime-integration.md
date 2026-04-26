@@ -13,7 +13,7 @@
 |------|----------|-------------|----------|-------|
 | **Adapter** | OpenClawAdapter（内置） | ClaudeCodeAdapter（内置） | OpencodeAdapter（内置） | GenericAdapter + YAML DSL |
 | **Adapter 状态** | ✅ 已实装 | ⚠️ 待实测（R2） | ⚠️ Phase 2 | Phase 2（T-SLL-012） |
-| **Skill 存放路径** | `~/.openclaw/workspace/skills/self-learning-loop/` | `~/.agents/skills/self-learning-loop/` | `~/.config/opencode/skills/self-learning-loop/` | `~/.codex/skills/` 或 `~/.agents/skills/` |
+| **Skill 存放路径** | `~/.openclaw/workspace/skills/self-learning-loop/` | `~/.claude/skills/self-learning-loop/` | `~/.local/share/opencode/skills/self-learning-loop/` | `~/.codex/skills/self-learning-loop/` |
 | **Session 数据源** | `~/.openclaw/agents/*/sessions/*.jsonl`（v5.0.4） | `~/.claude/projects/*/sessions/*.jsonl` ⚠️ | SQLite `~/.local/share/opencode/opencode.db`（R1） | 取决于 YAML mapping |
 | **Session 格式** | JSONL，envelope `{type:"message", message:{role, content:[parts]}}` | JSONL，类似 OpenClaw 但字段名不同 | SQLite 数据库（messages 表） | 取决于 YAML mapping |
 | **Workspace 检测** | `$OPENCLAW_WORKSPACE` → `~/.openclaw/workspace/` | `$CLAUDE_CODE_WORKSPACE` → `pwd` | `$OPENCODE_WORKSPACE` → `pwd` | `$CODEX_WORKSPACE` → `pwd` |

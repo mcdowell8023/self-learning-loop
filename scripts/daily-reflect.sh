@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # daily-reflect.sh — T-SLL-007
 # Run learning-loop reflect with runtime detection, token budget check,
-# and off-peak enforcement. Logs JSONL to <workspace>/learning-loop/logs/.
+# and off-peak enforcement. Logs JSONL to <workspace>/learn/logs/.
 #
 # Usage: daily-reflect.sh [--dry-run]
 
@@ -39,7 +39,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIG_FILE="${PROJECT_DIR}/config.yaml"
 DATE="$(date +%Y-%m-%d)"
-LOG_DIR="${WORKSPACE}/learning-loop/logs"
+LOG_DIR="${WORKSPACE}/learn/logs"
 LOG_FILE="${LOG_DIR}/daily-reflect-${DATE}.log"
 CHECK_BUDGET="${SCRIPT_DIR}/check-token-budget.sh"
 

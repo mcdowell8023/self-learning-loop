@@ -27,7 +27,7 @@ Usage: $(basename "$0") [OPTIONS]
 
 Options:
   --mode local|global|npm   Install mode (default: local)
-                            local  — symlink to ~/.openclaw/workspace/skills/
+                            local  — copy metadata to ~/.openclaw/workspace/skills/
                             global — symlink to ~/.local/share/openclaw-learn/ (multi-runtime)
                             npm    — npm link (developer mode)
   --runtime NAME            Target runtime: openclaw|claude-code|opencode|codex|auto (default: auto-detect)
@@ -94,11 +94,22 @@ get_skill_link_target() {
 get_data_dir() {
   local rt="$1"
   case "$rt" in
-    openclaw)    echo "$HOME_DIR/.openclaw/workspace/learning-loop" ;;
-    claude-code) echo "$HOME_DIR/.claude/learning-loop" ;;
-    opencode)    echo "$HOME_DIR/.local/share/opencode/learning-loop" ;;
-    codex)       echo "${CODEX_DATA_PATH:-$HOME_DIR/.codex/learning-loop}" ;;
+    openclaw)    echo "$HOME_DIR/.openclaw/learn" ;;
+    claude-code) echo "$HOME_DIR/.claude/learn" ;;
+    opencode)    echo "$HOME_DIR/.local/share/opencode/learn" ;;
+    codex)       echo "${CODEX_DATA_PATH:-$HOME_DIR/.codex/learn}" ;;
     *) echo "$HOME_DIR/.local/share/openclaw-learn/data"; return 0 ;;
+  esac
+}
+
+get_init_workspace() {
+  local rt="$1"
+  case "$rt" in
+    openclaw)    echo "$HOME_DIR/.openclaw" ;;
+    claude-code) echo "$HOME_DIR/.claude" ;;
+    opencode)    echo "$HOME_DIR/.local/share/opencode" ;;
+    codex)       echo "${CODEX_DATA_PATH:-$HOME_DIR/.codex}" ;;
+    *) echo "$HOME_DIR/.local/share/openclaw-learn"; return 0 ;;
   esac
 }
 
@@ -218,12 +229,7 @@ WRAPPER
     fi
   fi
 
-  local data_dir
-  data_dir="$(get_data_dir "$rt")"
-  make_dir "$data_dir"
-  make_dir "$data_dir/audit"
-  make_dir "$data_dir/candidates"
-  ok "Data directory: $data_dir"
+  ok "Skill files installed for $rt"
 }
 
 # ─── Install: mode global ───────────────────────────
@@ -289,18 +295,18 @@ WRAPPER
 
 # ─── Init & health check ────────────────────────────
 run_init() {
-  local data_dir="$1"
+  local init_workspace="$1"
   local cli="$REPO_DIR/dist/cli/learn.js"
   if [[ ! -f "$cli" ]]; then
     warn "dist/cli/learn.js not found — run 'npm run build' first"
     return 0
   fi
   if $DRY_RUN; then
-    dry "node $cli init --workspace $(dirname "$data_dir")"
+    dry "node $cli init --workspace $init_workspace"
     dry "node $cli status"
   else
-    info "Running init..."
-    node "$cli" init --workspace "$(dirname "$data_dir")" || { err "init failed with exit code $?"; return 1; }
+    info "Running init (workspace: $init_workspace)..."
+    node "$cli" init --workspace "$init_workspace" || { err "init failed with exit code $?"; return 1; }
     info "Running health check..."
     node "$cli" status || warn "status check returned non-zero"
   fi
@@ -391,13 +397,13 @@ main() {
   echo ""
   if [[ "$MODE" != "npm" ]]; then
     local primary_rt="${RUNTIME_PATHS[0]}"
-    local data_dir
+    local init_ws
     if [[ "$MODE" == "global" ]]; then
-      data_dir="$HOME_DIR/.local/share/openclaw-learn/data"
+      init_ws="$HOME_DIR/.local/share/openclaw-learn"
     else
-      data_dir="$(get_data_dir "$primary_rt")"
+      init_ws="$(get_init_workspace "$primary_rt")"
     fi
-    run_init "$data_dir"
+    run_init "$init_ws"
   fi
 
   echo ""

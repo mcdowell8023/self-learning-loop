@@ -7,6 +7,9 @@
   "bin": {
     "openclaw-learn": "./dist/cli/learn.js"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json && mkdir -p dist/store/migrations && cp src/store/migrations/*.sql dist/store/migrations/",
     "test": "vitest run",

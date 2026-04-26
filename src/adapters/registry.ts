@@ -4,10 +4,9 @@
  * @module
  */
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
-
-import { existsSync as fsExistsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { RuntimeAdapter } from './base.js';
 import { GenericAdapter } from './generic.js';
 import { OpenClawAdapter } from './openclaw.js';
@@ -20,12 +19,40 @@ type AdapterFactory = () => RuntimeAdapter;
 
 // ─── Built-in registry ──────────────────────────────
 
-/** Default path for codex YAML mapping. */
-const CODEX_YAML_PATH = join(homedir(), 'open-claw-output/code/learning-loop/configs/adapters/codex.yaml');
+/**
+ * Discover codex.yaml via a multi-step chain:
+ * 1. LEARN_ADAPTERS_DIR env var
+ * 2. <package dir>/configs/adapters/  (relative to this file)
+ * 3. <cwd>/configs/adapters/
+ * 4. Source repo fallback
+ */
+function discoverCodexYaml(): string {
+  const filename = 'codex.yaml';
+
+  // 1. Env override
+  if (process.env.LEARN_ADAPTERS_DIR) {
+    const p = join(process.env.LEARN_ADAPTERS_DIR, filename);
+    if (existsSync(p)) return p;
+  }
+
+  // 2. Relative to this module (works after setup.sh copies configs/)
+  const thisDir = dirname(fileURLToPath(import.meta.url));
+  const pkgRoot = join(thisDir, '..'); // dist/ -> package root
+  const pkgPath = join(pkgRoot, 'configs/adapters', filename);
+  if (existsSync(pkgPath)) return pkgPath;
+
+  // 3. CWD-based
+  const cwdPath = join(process.cwd(), 'configs/adapters', filename);
+  if (existsSync(cwdPath)) return cwdPath;
+
+  // 4. Source repo fallback
+  const fallback = join(homedir(), 'open-claw-output/code/learning-loop/configs/adapters', filename);
+  return fallback; // may not exist — GenericAdapter constructor will throw
+}
 
 const builtinFactories = new Map<RuntimeId, AdapterFactory>([
   ['openclaw', () => new OpenClawAdapter()],
-  ['codex', () => new GenericAdapter(CODEX_YAML_PATH)],
+  ['codex', () => new GenericAdapter(discoverCodexYaml())],
   // claude-code, opencode — stub factories; real implementations in future tickets
 ]);
 

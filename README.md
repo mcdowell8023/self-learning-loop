@@ -90,7 +90,7 @@ openclaw-learn status
 | OpenClaw | ✅ Tested | `~/.openclaw/workspace/skills/self-learning-loop/` |
 | Claude Code | ✅ Tested | `~/.claude/skills/self-learning-loop/` |
 | Opencode | ✅ Tested | `~/.local/share/opencode/skills/self-learning-loop/` |
-| Codex | 🔄 YAML mapping ready, untested | `configs/codex-mapping.yaml` |
+| Codex | ✅ YAML adapter ready (T-SLL-012, tested) | `configs/adapters/codex.yaml` |
 
 `setup.sh` auto-detects available runtimes and installs to all of them.
 
@@ -113,6 +113,25 @@ All commands use the `openclaw-learn` binary.
 Global flags: `--workspace <path>`, `--verbose`
 
 Full details: [`references/triggers.md`](references/triggers.md) (includes CLI command catalog and trigger conditions)
+
+### Cross-runtime Install
+
+```bash
+# Install for a specific runtime (e.g., codex)
+bash scripts/setup.sh --mode local --runtime codex
+
+# Install for all detected runtimes
+bash scripts/setup.sh --mode local
+```
+
+### Configuration Inspection
+
+```bash
+# Show merged config with source tracking
+openclaw-learn config show
+# Output: Field / Value / Source three-column table
+# Source values: default, config-file, env-var, cli-override
+```
 
 ## Configuration
 

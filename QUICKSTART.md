@@ -269,8 +269,8 @@ cat ~/.openclaw/workspace/learn/config.yaml > /tmp/learn-config.txt
 ## 当前已知限制（v1.1.0-alpha.1）
 
 - **影子观察统计** 还在 P1b 阶段开发中，validating 状态主要靠人工或时间触发
-- **Codex YAML mapping** 未实测，部署 codex runtime 前需调整 `configs/codex-mapping.yaml`
-- **`config show`** 当前只显示合并后值，不显示 default/override 来源（M2，P2 修复）
+- **Codex YAML adapter** 已实装（T-SLL-012, tested），配置文件位于 `configs/adapters/codex.yaml`
+- **`config show`** 显示 Field / Value / Source 三栏，Source 来源含 default / config-file / env-var / cli-override（T-SLL-006 已实装）
 - **E2E 跨 runtime 串测** 还没做（你的真实使用就是最好的 E2E）
 
 ---

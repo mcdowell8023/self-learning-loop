@@ -147,9 +147,8 @@ export class GenericAdapter implements RuntimeAdapter {
 
       // Apply transforms
       const transforms = this.mapping.transforms;
-      if (transforms?.role_map && role in transforms.role_map) {
-        role = transforms.role_map[role];
-      }
+      const mapped = transforms?.role_map?.[role];
+      if (mapped) role = mapped;
 
       let timestamp: Date;
       if (tsRaw == null) {

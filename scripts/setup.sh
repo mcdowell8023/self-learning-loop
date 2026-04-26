@@ -209,6 +209,13 @@ exec "$cli_path" "\$@"
 WRAPPER
     chmod +x "$skill_dir/bin/learn.sh"
     ok "Created bin/learn.sh wrapper → $cli_path"
+
+    # Copy configs/adapters/ (YAML adapter mappings)
+    if [[ -d "$REPO_DIR/configs/adapters" ]]; then
+      make_dir "$skill_dir/configs/adapters"
+      cp "$REPO_DIR/configs/adapters/"* "$skill_dir/configs/adapters/" 2>/dev/null || true
+      ok "Copied configs/adapters/ ($(ls "$skill_dir/configs/adapters/" 2>/dev/null | wc -l) files)"
+    fi
   fi
 
   local data_dir

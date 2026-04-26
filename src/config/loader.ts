@@ -45,6 +45,29 @@ export interface ReloadFailure {
 
 export type ReloadResult = ReloadSuccess | ReloadFailure;
 
+/**
+ * Interpolate `${VAR}` patterns in a string with environment variable values.
+ */
+export function interpolateEnvVars(value: string, env: NodeJS.ProcessEnv = process.env): string {
+  return value.replace(/\$\{(\w+)\}/g, (_, name) => env[name] ?? '');
+}
+
+/**
+ * Recursively interpolate env vars in all string values of an object.
+ */
+function interpolatePaths(obj: unknown, env: NodeJS.ProcessEnv): unknown {
+  if (typeof obj === 'string') return interpolateEnvVars(obj, env);
+  if (Array.isArray(obj)) return obj.map(v => interpolatePaths(v, env));
+  if (obj && typeof obj === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      out[k] = interpolatePaths(v, env);
+    }
+    return out;
+  }
+  return obj;
+}
+
 // ─── Constants ──────────────────────────────────────
 
 const ENV_PREFIX = 'OPENCLAW_LEARN_';
@@ -155,6 +178,8 @@ const KNOWN_COMPOUND_KEYS: readonly string[] = [
   'risk_escalation_rules',
   'base_dir', 'audit_dir', 'candidates_dir', 'clusters_dir', 'max_jsonl_size_kb',
   'agents_root', 'projects_root', 'legacy_session_dir', 'session_dir',
+  'skills_dir', 'data_dir', 'memory_dir',
+  'claude_code',
 ];
 
 function splitEnvPath(suffix: string): string[] {
@@ -208,18 +233,75 @@ function extractEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
 
 // ─── Core API ───────────────────────────────────────
 
+/**
+ * Compute per-field source tracking.
+ * Flattens config to dot-paths and determines origin.
+ */
+function computeFieldSources(
+  config: LearnConfig,
+  userRaw: unknown,
+  projectRaw: unknown,
+  envOverrides: Record<string, unknown>,
+): Map<string, 'default' | 'config-file' | 'env-var'> {
+  const sources = new Map<string, 'default' | 'config-file' | 'env-var'>();
+
+  function flatten(obj: unknown, prefix: string = ''): string[] {
+    const paths: string[] = [];
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      for (const [k, v] of Object.entries(obj)) {
+        const p = prefix ? `${prefix}.${k}` : k;
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          paths.push(...flatten(v, p));
+        } else {
+          paths.push(p);
+        }
+      }
+    }
+    return paths;
+  }
+
+  function hasPath(obj: unknown, path: string): boolean {
+    const parts = path.split('.');
+    let cur: unknown = obj;
+    for (const p of parts) {
+      if (cur == null || typeof cur !== 'object') return false;
+      if (!(p in (cur as Record<string, unknown>))) return false;
+      cur = (cur as Record<string, unknown>)[p];
+    }
+    return true;
+  }
+
+  const allPaths = flatten(config);
+  for (const path of allPaths) {
+    if (hasPath(envOverrides, path)) {
+      sources.set(path, 'env-var');
+    } else if (hasPath(projectRaw, path) || hasPath(userRaw, path)) {
+      sources.set(path, 'config-file');
+    } else {
+      sources.set(path, 'default');
+    }
+  }
+  return sources;
+}
+
 function buildMerged(opts: Required<LoaderOptions>): {
   ok: true;
   raw: unknown;
   sources: string[];
+  userRaw: unknown;
+  projectRaw: unknown;
+  envOverrides: Record<string, unknown>;
 } | ReloadFailure {
   const sources: string[] = ['defaults'];
   let merged: unknown = {};
+  let userRaw: unknown = {};
+  let projectRaw: unknown = {};
 
   // user level
   if (existsSync(opts.userConfigPath)) {
     const r = safeReadYaml(opts.userConfigPath);
     if (!r.ok) return { ok: false, error_code: r.error_code, message: r.message };
+    userRaw = r.data;
     merged = deepMerge(merged, r.data);
     sources.push(`user:${opts.userConfigPath}`);
   }
@@ -228,6 +310,7 @@ function buildMerged(opts: Required<LoaderOptions>): {
   if (existsSync(opts.projectConfigPath)) {
     const r = safeReadYaml(opts.projectConfigPath);
     if (!r.ok) return { ok: false, error_code: r.error_code, message: r.message };
+    projectRaw = r.data;
     merged = deepMerge(merged, r.data);
     sources.push(`project:${opts.projectConfigPath}`);
   }
@@ -239,7 +322,7 @@ function buildMerged(opts: Required<LoaderOptions>): {
     sources.push('env');
   }
 
-  return { ok: true, raw: merged, sources };
+  return { ok: true, raw: merged, sources, userRaw, projectRaw, envOverrides };
 }
 
 function normalizeOpts(opts: LoaderOptions): Required<LoaderOptions> {
@@ -251,9 +334,11 @@ function normalizeOpts(opts: LoaderOptions): Required<LoaderOptions> {
   };
 }
 
-function validate(raw: unknown): { ok: true; config: LearnConfig } | ReloadFailure {
+function validate(raw: unknown, env: NodeJS.ProcessEnv = process.env): { ok: true; config: LearnConfig } | ReloadFailure {
   try {
     const parsed = LearnConfigSchema.parse(raw);
+    // Interpolate env vars in paths
+    parsed.paths = interpolatePaths(parsed.paths, env) as LearnConfig['paths'];
     return { ok: true, config: parsed };
   } catch (err) {
     const zerr = err instanceof ZodError ? err : null;
@@ -285,10 +370,13 @@ function diffTopLevel(a: LearnConfig, b: LearnConfig): string[] {
 export class ConfigLoader {
   private current: LearnConfig;
   private opts: Required<LoaderOptions>;
+  /** Tracks which source each top-level field was last set by. */
+  private _sources: Map<string, 'default' | 'config-file' | 'env-var'> = new Map();
 
-  private constructor(initial: LearnConfig, opts: Required<LoaderOptions>) {
+  private constructor(initial: LearnConfig, opts: Required<LoaderOptions>, sources?: Map<string, 'default' | 'config-file' | 'env-var'>) {
     this.current = initial;
     this.opts = opts;
+    if (sources) this._sources = sources;
   }
 
   /**
@@ -300,11 +388,17 @@ export class ConfigLoader {
     if (!merged.ok) {
       throw new Error(`[config] initial load failed: ${merged.message}`);
     }
-    const validated = validate(merged.raw);
+    const validated = validate(merged.raw, full.env);
     if (!validated.ok) {
       throw new Error(`[config] initial validation failed: ${validated.message}`);
     }
-    return new ConfigLoader(validated.config, full);
+    const fieldSources = computeFieldSources(validated.config, merged.userRaw, merged.projectRaw, merged.envOverrides);
+    return new ConfigLoader(validated.config, full, fieldSources);
+  }
+
+  /** Get per-field source map. */
+    getSources(): Map<string, 'default' | 'config-file' | 'env-var'> {
+    return this._sources;
   }
 
   /** 当前生效配置（只读视图 —— 调用方不应 mutate）。 */
@@ -332,11 +426,12 @@ export class ConfigLoader {
     const next = overrideOpts ? normalizeOpts(overrideOpts) : this.opts;
     const merged = buildMerged(next);
     if (!merged.ok) return merged;
-    const validated = validate(merged.raw);
+    const validated = validate(merged.raw, next.env);
     if (!validated.ok) return validated;
     const prev = this.current;
     this.current = validated.config;
     this.opts = next;
+    this._sources = computeFieldSources(validated.config, merged.userRaw, merged.projectRaw, merged.envOverrides);
     return {
       ok: true,
       config: validated.config,
@@ -353,6 +448,12 @@ let _singleton: ConfigLoader | null = null;
 export function loadConfig(opts: LoaderOptions = {}): LearnConfig {
   if (!_singleton) _singleton = ConfigLoader.load(opts);
   return _singleton.get();
+}
+
+/** Get field source map (must call loadConfig first). */
+export function getConfigSources(): Map<string, 'default' | 'config-file' | 'env-var'> {
+  if (!_singleton) throw new Error('[config] not loaded; call loadConfig() first');
+  return _singleton.getSources();
 }
 
 /** 触发热更新（CLI `openclaw learn config reload` 的实现入口）。 */

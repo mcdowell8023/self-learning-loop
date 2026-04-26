@@ -168,10 +168,37 @@ const StorageConfigSchema = z.object({
   max_jsonl_size_kb: z.number().int().positive().default(500),
 });
 
+// ─── Runtime & Paths & Triggers (T-SLL-006) ────────
+
+const RuntimeEnum = z.enum(['openclaw', 'claude-code', 'opencode', 'codex', 'auto']).default('auto');
+
+const PathsConfigSchema = z.object({
+  skills_dir: z.string().default('${HOME}/.openclaw/workspace/skills'),
+  data_dir: z.string().default('${HOME}/.openclaw/learn'),
+  memory_dir: z.string().default('${HOME}/.openclaw/workspace/memory'),
+});
+
+const TriggerEntrySchema = z.object({
+  event: z.string(),
+  handler: z.string().optional(),
+  enabled: z.boolean().default(true),
+  options: z.record(z.unknown()).default({}),
+});
+
+const RuntimeTriggersSchema = z.object({
+  openclaw: z.array(TriggerEntrySchema).default([]),
+  'claude-code': z.array(TriggerEntrySchema).default([]),
+  opencode: z.array(TriggerEntrySchema).default([]),
+  codex: z.array(TriggerEntrySchema).default([]),
+});
+
 // ─── Root Config ────────────────────────────────────
 
 /** §11.2 Full config.yaml schema. */
 export const LearnConfigSchema = z.object({
+  runtime: RuntimeEnum,
+  paths: PathsConfigSchema.default({}),
+  triggers: RuntimeTriggersSchema.default({}),
   collect: CollectConfigSchema.default({}),
   reflect: ReflectConfigSchema.default({}),
   shadow: ShadowConfigSchema.default({}),

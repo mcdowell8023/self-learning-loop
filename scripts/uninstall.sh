@@ -90,6 +90,7 @@ SKILL_LINKS=(
   "$HOME_DIR/.openclaw/workspace/skills/self-learning-loop"
   "$HOME_DIR/.claude/skills/self-learning-loop"
   "$HOME_DIR/.local/share/opencode/skills/self-learning-loop"
+  "${CODEX_SKILL_PATH:-$HOME_DIR/.codex/skills/self-learning-loop}"
 )
 
 for link in "${SKILL_LINKS[@]}"; do
@@ -132,6 +133,7 @@ if ! $KEEP_DATA; then
     "$HOME_DIR/.openclaw/workspace/learning-loop"
     "$HOME_DIR/.claude/learning-loop"
     "$HOME_DIR/.local/share/opencode/learning-loop"
+    "${CODEX_DATA_PATH:-$HOME_DIR/.codex/learning-loop}"
     "$HOME_DIR/.local/share/openclaw-learn/data"
   )
   for dir in "${DATA_DIRS[@]}"; do

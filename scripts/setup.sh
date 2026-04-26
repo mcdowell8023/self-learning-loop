@@ -74,7 +74,9 @@ detect_runtimes() {
   if [[ -d "$HOME_DIR/.local/share/opencode" ]]; then
     found+=("opencode")
   fi
-  # codex requires user-specified path, skip auto-detect
+  if [[ -d "$HOME_DIR/.codex" ]]; then
+    found+=("codex")
+  fi
   RUNTIME_PATHS=("${found[@]}")
 }
 
@@ -297,6 +299,47 @@ run_init() {
   fi
 }
 
+# ─── Permission check ────────────────────────────────
+check_writable() {
+  local dir="$1"
+  # Walk up to find first existing ancestor
+  while [[ ! -d "$dir" ]]; do
+    dir="$(dirname "$dir")"
+  done
+  if [[ ! -w "$dir" ]]; then
+    err "No write permission to $dir"
+    return 1
+  fi
+}
+
+# ─── Rollback support ───────────────────────────────
+CREATED_ITEMS=()
+
+track_item() {
+  CREATED_ITEMS+=("$1")
+}
+
+rollback() {
+  if [[ ${#CREATED_ITEMS[@]} -eq 0 ]]; then return 0; fi
+  warn "Rolling back ${#CREATED_ITEMS[@]} created items..."
+  for (( i=${#CREATED_ITEMS[@]}-1; i>=0; i-- )); do
+    local item="${CREATED_ITEMS[$i]}"
+    if [[ -L "$item" ]]; then
+      rm "$item" && warn "Removed symlink: $item"
+    elif [[ -d "$item" && -z "$(ls -A "$item" 2>/dev/null)" ]]; then
+      rmdir "$item" && warn "Removed empty dir: $item"
+    fi
+  done
+}
+
+# Override make_link/make_dir to track for rollback
+_orig_make_dir() { mkdir -p "$1"; }
+_orig_make_link() {
+  local target="$1" link_name="$2"
+  make_dir "$(dirname "$link_name")"
+  ln -s "$target" "$link_name"
+}
+
 # ─── Main ────────────────────────────────────────────
 main() {
   echo ""
@@ -309,6 +352,17 @@ main() {
   resolve_runtime
   info "Target runtime(s): ${RUNTIME_PATHS[*]}"
   echo ""
+
+  # Permission pre-check
+  if ! $DRY_RUN; then
+    for rt in "${RUNTIME_PATHS[@]}"; do
+      local target_dir
+      target_dir="$(dirname "$(get_skill_link_target "$rt")")"
+      check_writable "$target_dir" || exit 1
+    done
+  fi
+
+  trap 'rollback' ERR
 
   case "$MODE" in
     local)

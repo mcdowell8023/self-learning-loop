@@ -331,7 +331,7 @@ openclaw cron remove self-learning-loop-daily
 crontab -e
 
 # 添加行：
-30 22 * * * bash ~/.agents/skills/self-learning-loop/scripts/daily-reflect.sh >> ~/.self-learning-loop/logs/cron.log 2>&1
+30 22 * * * bash ~/.openclaw/learn/scripts/daily-reflect.sh >> ~/.openclaw/learn/logs/cron.log 2>&1
 ```
 
 ### daily-reflect.sh 通用化要点

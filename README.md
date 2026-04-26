@@ -4,7 +4,7 @@
 > Let your AI extract reusable rules from real conversations and graduate them into AGENTS.md / TOOLS.md automatically.
 
 ![version](https://img.shields.io/badge/version-1.1.0--alpha.1-blue)
-![tests](https://img.shields.io/badge/tests-389%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-416%20passing-brightgreen)
 ![runtimes](https://img.shields.io/badge/runtimes-openclaw%20%7C%20claude--code%20%7C%20opencode%20%7C%20codex-purple)
 
 ---
@@ -222,7 +222,7 @@ See also: [QUICKSTART.md](QUICKSTART.md) for a guided walkthrough.
 This is a personal project by [mcdowell8023](https://github.com/mcdowell8023).
 
 - **Bug reports:** Open a GitHub issue with `openclaw-learn status` and `audit --tail 20` output
-- **Pull requests:** Fork → branch → ensure `npm test` passes (389 tests) → PR
+- **Pull requests:** Fork → branch → ensure `npm test` passes (416 tests) → PR
 - **Questions:** Open an issue or reach out
 
 ## License

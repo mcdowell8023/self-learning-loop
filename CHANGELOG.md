@@ -5,6 +5,24 @@ All notable changes to @openclaw/self-learning-loop will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0-alpha.4] — 2026-04-27
+
+Rich candidate metadata for reporter integration.
+
+### Added
+- **candidate.summary**: 1-2 句中文人话总结，由 reflect LLM 一并产出
+- **candidate.trigger_event**: 触发事件元信息（id + summary）
+- **dropped_summary**: reflection-completed 事件中按原因类型聚合的 dropped 统计
+- **dropped_items**: reflection-completed 事件中每条 dropped 候选的详细信息（id/reason/summary）
+- **new_candidate_ids**: reflection-completed 事件中新增候选 ID 列表
+- **candidate_dropped** audit event: 每个被丢弃的候选写入 reason/reason_code/reason_detail
+- DroppedReason 类型: `duplicate` | `low_confidence` | `low_signal` | `schema_invalid` | `other`
+- Prompt 支持 `{"candidates": [...]}` 包装格式（同时兼容纯数组）
+
+### Changed
+- reflection-completed event version 升级为 1.1
+- Candidate mirror frontmatter 包含 summary / trigger_event
+
 ## [1.1.0-alpha.3] — 2026-04-27
 
 Bug fixes + event hook system for reporter integration.

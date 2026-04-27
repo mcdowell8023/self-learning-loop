@@ -48,6 +48,14 @@ export function renderMirror(candidate: Candidate): string {
     frontmatter.dormant_reason = candidate.dormant_reason;
   }
 
+  if (candidate.strategy.summary) {
+    frontmatter.summary = candidate.strategy.summary;
+  }
+
+  if (candidate.strategy.trigger_event) {
+    frontmatter.trigger_event = candidate.strategy.trigger_event;
+  }
+
   // Source info from first instance (if any)
   if (candidate.instances.length > 0) {
     const inst = candidate.instances[0]!;

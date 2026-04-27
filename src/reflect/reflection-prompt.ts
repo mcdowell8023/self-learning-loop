@@ -109,6 +109,8 @@ candidates 数组中每个元素的字段定义：
 | confidence | number | 可选 | 0.0-1.0，有文件/命令证据 ≥ 0.7；流程类 0.3-0.7；默认 0.5 |
 | rationale | string | 可选 | 为什么这是一条好规则 |
 | tags | string[] | 可选 | 标签，如 \`["model-routing", "reliability"]\` |
+| summary | string | **必填** | 1-2 句中文人话总结这条候选在说什么（供日报展示） |
+| trigger_event | object | 可选 | 触发这条候选的事件摘要，格式 \`{"id": "evt_xxx", "summary": "一句话描述触发事件"}\` |
 
 assertions[].type 允许值：\`"file_exists"\` / \`"regex_match"\` / \`"command_exit_code"\` / 其他自定义字符串。
 
@@ -134,7 +136,9 @@ assertions[].type 允许值：\`"file_exists"\` / \`"regex_match"\` / \`"command
     ],
     "confidence": 0.85,
     "rationale": "gemini-3.1-pro 在长文档输出上连续失败，已有多次超时记录",
-    "tags": ["model-routing", "reliability"]
+    "tags": ["model-routing", "reliability"],
+    "summary": "架构类任务禁用 gemini-3.1-pro-preview，该模型在长文档输出上连续超时失败。",
+    "trigger_event": {"id": "evt_20260422_dreaming", "summary": "图灵用 gemini-3.1-pro 起稿 Dreaming 整合方案超时退出"}
   }
 ]}
 \`\`\`
@@ -155,7 +159,9 @@ assertions[].type 允许值：\`"file_exists"\` / \`"regex_match"\` / \`"command
     ],
     "confidence": 0.6,
     "rationale": "连续两轮 CHANGELOG 过报，引入自查机制后一次过",
-    "tags": ["review-process", "trust"]
+    "tags": ["review-process", "trust"],
+    "summary": "修订交付时必须附 grep 自查证据，防止 CHANGELOG 过报。",
+    "trigger_event": {"id": "evt_20260419_v501", "summary": "v5.0.1/v5.0.2 连续两轮 CHANGELOG 过报"}
   }
 ]}
 \`\`\`

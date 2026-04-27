@@ -517,3 +517,100 @@ describe('defaults', () => {
     expect(DEFAULT_TRIGGER_CONFIG.timeWindowMs).toBe(6 * 60 * 60 * 1000);
   });
 });
+
+// ===========================================================================
+// 5. v1.1.0-alpha.4: summary / trigger_event / dropped_summary
+// ===========================================================================
+
+describe('alpha.4 rich metadata', () => {
+  let tmpDir: string;
+  let store: CandidateStore;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'cg-alpha4-'));
+    store = openCandidateStore({
+      dbPath: join(tmpDir, 'candidates.db'),
+      candidatesDir: join(tmpDir, 'candidates'),
+    });
+  });
+
+  afterEach(() => {
+    store.close();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('extracts summary field from LLM response', async () => {
+    const response = JSON.stringify([{
+      problem_category: 'test_summary',
+      trigger_conditions: 'always',
+      recommended_action: 'do stuff',
+      scope: 'general',
+      confidence: 0.8,
+      summary: '当工具链报告测试通过但实际未验证时，不应做决策。',
+      trigger_event: { id: 'evt_001', summary: 'pollinations 故障诊断' },
+    }]);
+    const llm = new MockLLMClient([response]);
+    const gen = new CandidateGenerator(llm, store);
+    const result = await gen.reflect({
+      events: [{ type: 'error', timestamp: new Date(), content: 'fail', metadata: {} }],
+      env: ENV, sessionId: 'sess-alpha4',
+    });
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]!.strategy.summary).toBe('当工具链报告测试通过但实际未验证时，不应做决策。');
+    expect(result.candidates[0]!.strategy.trigger_event).toEqual({ id: 'evt_001', summary: 'pollinations 故障诊断' });
+  });
+
+  it('handles missing summary gracefully (undefined)', async () => {
+    const response = JSON.stringify([{
+      problem_category: 'no_summary',
+      trigger_conditions: 'always',
+      recommended_action: 'do stuff',
+      scope: 'general',
+      confidence: 0.8,
+    }]);
+    const llm = new MockLLMClient([response]);
+    const gen = new CandidateGenerator(llm, store);
+    const result = await gen.reflect({
+      events: [{ type: 'error', timestamp: new Date(), content: 'fail', metadata: {} }],
+      env: ENV, sessionId: 'sess-no-summary',
+    });
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]!.strategy.summary).toBeUndefined();
+    expect(result.candidates[0]!.strategy.trigger_event).toBeUndefined();
+  });
+
+  it('classifies dropped reasons correctly', async () => {
+    const response = JSON.stringify([
+      { problem_category: 'x', trigger_conditions: 'y', recommended_action: 'z', scope: 'general', confidence: 0.1 },
+      { problem_category: 'a', trigger_conditions: 'b', recommended_action: 'c', scope: 'INVALID_SCOPE', confidence: 0.8 },
+    ]);
+    const llm = new MockLLMClient([response]);
+    const gen = new CandidateGenerator(llm, store);
+    const result = await gen.reflect({
+      events: [{ type: 'error', timestamp: new Date(), content: 'fail', metadata: {} }],
+      env: ENV, sessionId: 'sess-dropped',
+    });
+    expect(result.dropped).toHaveLength(2);
+    expect(result.dropped[0]!.reason_code).toBe('low_confidence');
+    expect(result.dropped[1]!.reason_code).toBe('schema_invalid');
+  });
+
+  it('parses {candidates: [...]} wrapper format', async () => {
+    const response = JSON.stringify({ candidates: [{
+      problem_category: 'wrapped',
+      trigger_conditions: 'always',
+      recommended_action: 'do',
+      scope: 'general',
+      confidence: 0.7,
+      summary: '包装格式测试',
+    }]});
+    const llm = new MockLLMClient([response]);
+    const gen = new CandidateGenerator(llm, store);
+    const result = await gen.reflect({
+      events: [{ type: 'error', timestamp: new Date(), content: 'fail', metadata: {} }],
+      env: ENV, sessionId: 'sess-wrapped',
+    });
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]!.strategy.summary).toBe('包装格式测试');
+  });
+});

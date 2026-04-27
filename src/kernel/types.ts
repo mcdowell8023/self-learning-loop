@@ -108,6 +108,12 @@ export type {
 } from './schemas/verdict.js';
 export type { LearnConfig } from './schemas/config.js';
 
+/** Trigger event metadata (冗余在候选中，供日报展示) */
+export interface TriggerEventMeta {
+  id?: string;
+  summary: string;
+}
+
 /** §5.1.2 Strategy Schema */
 export interface Strategy {
   strategy_id: string;
@@ -116,6 +122,10 @@ export interface Strategy {
   recommended_action: string;
   scope: CandidateScope;
   tags?: string[];
+  /** 1-2 句人话总结（v1.1.0-alpha.4+） */
+  summary?: string;
+  /** 触发事件元信息（v1.1.0-alpha.4+） */
+  trigger_event?: TriggerEventMeta;
   created_at: string;
   instance_ids: string[];
 }

@@ -661,6 +661,13 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
       out('\n🗑️  Dropped:\n');
       for (const d of result.dropped) {
         out(`   • ${d.reason}\n`);
+        // Write audit event for each dropped candidate
+        writeAuditEvent(workspace, {
+          event: 'candidate_dropped',
+          candidate_id_attempted: (d as any).candidate_id_attempted ?? null,
+          reason: (d as any).reason_code ?? 'other',
+          reason_detail: d.reason,
+        });
       }
     }
 
@@ -692,9 +699,31 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
 
     // ── A3: Write reflection-completed event ─────────────────────
     const reflectEndTs = Date.now();
+    // Build dropped_summary from result.dropped
+    const droppedSummary: Record<string, number> = {};
+    for (const d of result.dropped) {
+      const code = (d as any).reason_code ?? 'other';
+      droppedSummary[code] = (droppedSummary[code] ?? 0) + 1;
+    }
+
+    // Build dropped_items (detailed per-item info for reporter)
+    const droppedItems = result.dropped.map(d => ({
+      attempted_id: d.candidate_id_attempted ?? null,
+      reason: d.reason_code ?? 'other',
+      reason_detail: d.reason,
+      summary: (d.raw && typeof d.raw === 'object' && 'summary' in (d.raw as any))
+        ? String((d.raw as any).summary).slice(0, 100)
+        : (d.raw && typeof d.raw === 'object' && 'problem_category' in (d.raw as any))
+          ? String((d.raw as any).problem_category).slice(0, 100)
+          : null,
+    }));
+
+    // Collect new candidate IDs
+    const newCandidateIds = result.candidates.map(c => c.strategy.strategy_id);
+
     const eventData = {
       event: 'reflection-completed',
-      version: '1.0',
+      version: '1.1',
       timestamp: new Date().toISOString(),
       runtime: 'openclaw',
       workspace,
@@ -707,7 +736,10 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
         events_collected: events.length,
         candidates_generated: result.candidates.length,
         candidates_dropped: result.dropped.length,
+        dropped_summary: Object.keys(droppedSummary).length > 0 ? droppedSummary : undefined,
+        dropped_items: droppedItems.length > 0 ? droppedItems : undefined,
         reasons_triggered: result.triggerDecision?.reasons ?? [],
+        new_candidate_ids: newCandidateIds.length > 0 ? newCandidateIds : undefined,
       },
       candidates_summary: buildCandidatesSummary(store),
       errors: result.error ? [result.error] : [],

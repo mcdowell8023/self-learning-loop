@@ -23,6 +23,7 @@ import type {
   EnvFingerprint,
   Instance,
   Strategy,
+  TriggerEventMeta,
 } from '../kernel/types.js';
 import type { CandidateStore } from '../store/candidate-store.js';
 import type { LLMClient, LLMCompleteOptions } from './llm-client.js';
@@ -99,6 +100,16 @@ export interface GeneratedCandidate {
   raw: RawCandidateJSON;
 }
 
+export type DroppedReason = 'duplicate' | 'low_confidence' | 'low_signal' | 'schema_invalid' | 'other';
+
+export interface DroppedItem {
+  reason: string;
+  reason_code: DroppedReason;
+  reason_detail?: string;
+  candidate_id_attempted?: string;
+  raw: unknown;
+}
+
 export interface ReflectResult {
   /** 是否触发了反思（false = 触发器未命中或 manual=false 且无证据） */
   triggered: boolean;
@@ -108,7 +119,7 @@ export interface ReflectResult {
   /** 通过阈值 + schema 校验的候选 */
   candidates: GeneratedCandidate[];
   /** 被丢弃的项及原因 */
-  dropped: Array<{ reason: string; raw: unknown }>;
+  dropped: DroppedItem[];
   /** 实际写入 Store 的数量 */
   persistedCount: number;
   /** 错误信息（LLM/解析失败时） */
@@ -138,6 +149,8 @@ interface RawCandidateJSON {
   assertions?: RawAssertionJSON[];
   confidence?: number;
   rationale?: string;
+  summary?: string;
+  trigger_event?: { id?: string; summary?: string };
   [k: string]: unknown;
 }
 
@@ -229,12 +242,16 @@ export class CandidateGenerator {
     // 4) 校验 + 转换
     const nowIso = (input.now ?? new Date()).toISOString();
     const accepted: GeneratedCandidate[] = [];
-    const dropped: Array<{ reason: string; raw: unknown }> = [];
+    const dropped: DroppedItem[] = [];
 
     for (const raw of rawList) {
       const validation = this.validate(raw);
       if (!validation.ok) {
-        dropped.push({ reason: validation.reason, raw });
+        dropped.push({
+          reason: validation.reason,
+          reason_code: this.classifyDropReason(validation.reason),
+          raw,
+        });
         continue;
       }
 
@@ -260,6 +277,9 @@ export class CandidateGenerator {
         if (this.store.get(c.strategy.strategy_id) != null) {
           dropped.push({
             reason: 'duplicate_strategy_id (content-addressable)',
+            reason_code: 'duplicate',
+            reason_detail: `Strategy ID ${c.strategy.strategy_id} already exists`,
+            candidate_id_attempted: c.strategy.strategy_id,
             raw: c.raw,
           });
           continue;
@@ -273,6 +293,7 @@ export class CandidateGenerator {
       } catch (err) {
         dropped.push({
           reason: `store.create failed: ${(err as Error).message}`,
+          reason_code: 'other',
           raw: c.raw,
         });
       }
@@ -299,6 +320,18 @@ export class CandidateGenerator {
   }
 
   // -------------------------------------------------------------------------
+  // Classify drop reason into standard codes
+  // -------------------------------------------------------------------------
+
+  private classifyDropReason(reason: string): DroppedReason {
+    if (reason.includes('confidence')) return 'low_confidence';
+    if (reason.includes('duplicate')) return 'duplicate';
+    if (reason.includes('missing/empty field') || reason.includes('invalid scope') || reason.includes('not an object')) return 'schema_invalid';
+    if (reason.includes('low_signal')) return 'low_signal';
+    return 'other';
+  }
+
+  // -------------------------------------------------------------------------
   // 解析 LLM 响应
   // -------------------------------------------------------------------------
 
@@ -313,10 +346,14 @@ export class CandidateGenerator {
     const stripped = stripCodeFence(text.trim());
     try {
       const parsed = JSON.parse(stripped);
-      if (!Array.isArray(parsed)) {
-        return { ok: false, error: 'LLM response is not a JSON array' };
+      // Support both {"candidates": [...]} and plain [...] formats
+      if (Array.isArray(parsed)) {
+        return { ok: true, list: parsed as RawCandidateJSON[] };
       }
-      return { ok: true, list: parsed as RawCandidateJSON[] };
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.candidates)) {
+        return { ok: true, list: parsed.candidates as RawCandidateJSON[] };
+      }
+      return { ok: false, error: 'LLM response is not a JSON array or {candidates: [...]}' };
     } catch (e) {
       return {
         ok: false,
@@ -381,6 +418,24 @@ export class CandidateGenerator {
       recommended_action: raw.recommended_action as string,
     };
     const strategy_id = computeStrategyId(core);
+
+    // Extract summary (v1.1.0-alpha.4)
+    const summary = typeof raw.summary === 'string' && raw.summary.trim().length > 0
+      ? raw.summary.trim()
+      : undefined;
+
+    // Extract trigger_event (v1.1.0-alpha.4)
+    let trigger_event: TriggerEventMeta | undefined;
+    if (raw.trigger_event && typeof raw.trigger_event === 'object') {
+      const te = raw.trigger_event;
+      if (typeof te.summary === 'string' && te.summary.trim().length > 0) {
+        trigger_event = {
+          id: typeof te.id === 'string' ? te.id : undefined,
+          summary: te.summary.trim(),
+        };
+      }
+    }
+
     return {
       strategy_id,
       ...core,
@@ -388,6 +443,8 @@ export class CandidateGenerator {
       tags: Array.isArray(raw.tags)
         ? raw.tags.filter((t) => typeof t === 'string')
         : undefined,
+      summary,
+      trigger_event,
       created_at: nowIso,
       instance_ids: [],
     };

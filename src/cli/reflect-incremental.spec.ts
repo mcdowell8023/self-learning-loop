@@ -1,7 +1,7 @@
 // src/cli/reflect-incremental.spec.ts
 // Tests for incremental reflect: --from/--to/--today, watermark, dedup
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -73,19 +73,20 @@ describe('reflect --from/--to argument parsing', () => {
 });
 
 describe('reflect incremental watermark', () => {
-  it('with no watermark, processes yesterday by default (dry-run)', async () => {
-    setupWorkspace();
+  it('with no watermark, defaults to today instead of yesterday', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-27T10:00:00+08:00'));
     await runInit({ argv: ['--workspace', workspace], cwd: tmpRoot, stdout: out, stderr: err });
     stdoutBuf = []; stderrBuf = [];
 
-    // dry-run so no LLM call needed
     const r = await runLearn({
-      argv: ['reflect', '--workspace', workspace, '--from', '2026-04-20', '--to', '2026-04-20', '--dry-run'],
+      argv: ['reflect', '--workspace', workspace],
       cwd: tmpRoot, stdout: out, stderr: err,
     });
-    // Should load events from 2026-04-20
-    expect(stdoutStr()).toContain('2026-04-20');
-    expect(stdoutStr()).toContain('Processing dates');
+
+    expect(stdoutStr()).toContain('Processing dates: 2026-04-27 → 2026-04-27');
+    expect(stdoutStr()).toContain('No events found');
+    vi.useRealTimers();
   });
 
   it('--today flag works', async () => {

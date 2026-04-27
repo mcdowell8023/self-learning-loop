@@ -421,22 +421,19 @@ describe('learn status <id>', () => {
   });
 
   it('exit 4 on ambiguous prefix', async () => {
-    // Craft two candidates with the same first char by generating until collision.
-    // sha256 hex ⇒ candidates start with 0-9/a-f, so "a" prefix hits frequently.
-    let first: Candidate | null = null;
-    let second: Candidate | null = null;
-    // Seed many until two share a hex prefix.
-    for (let i = 0; i < 50 && !(first && second); i++) {
-      const c = seed(store, 'pending');
-      const ch = c.candidate_id[0]!;
-      if (!first) {
-        first = c;
-      } else if (c.candidate_id[0] === first.candidate_id[0] && c.candidate_id !== first.candidate_id) {
-        second = c;
-      }
+    const buckets = new Map<string, Candidate[]>();
+    let prefix: string | null = null;
+
+    for (let i = 0; i < 200 && !prefix; i++) {
+      const candidate = seed(store, 'pending');
+      const ch = candidate.candidate_id[0]!;
+      const list = buckets.get(ch) ?? [];
+      list.push(candidate);
+      buckets.set(ch, list);
+      if (list.length >= 2) prefix = ch;
     }
-    expect(first && second).toBeTruthy();
-    const prefix = first!.candidate_id[0]!;
+
+    expect(prefix).toBeTruthy();
 
     const r = await runStatus({
       argv: [prefix],

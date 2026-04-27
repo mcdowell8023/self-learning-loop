@@ -5,6 +5,27 @@ All notable changes to @openclaw/self-learning-loop will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0-alpha.5] — 2026-04-27
+
+Core reflect collection fix + built-in markdown daily reports.
+
+### Fixed
+- **Root cause of `events_collected: 1`**: reflect incremental mode previously only loaded `memory/YYYY-MM-DD*.md`, and default range stopped at **yesterday**, so same-day work never entered the pipeline and watermark could not advance to today.
+- Default incremental reflect range now runs **watermark+1 → today** instead of stopping at yesterday.
+- Added multi-source collection for reflect: workspace memory, OpenClaw transcripts, `learn/events/`, TODO git history, and KnowledgeBase ClawFeed Inbox.
+- Reflection dedup / watermark logging now hashes the **full collected source bucket per day**, not just memory markdown content.
+- `buildCandidatesSummary()` now reads candidate lifecycle state correctly (`state` instead of stale `status`).
+
+### Added
+- Built-in markdown daily report output: `learn/reports/YYYY-MM-DD-daily.md`
+- Same-day reflect appends `## Run #N` sections instead of overwriting the daily report.
+- `report_path` field in `learn/events/reflection-completed.json`
+- `src/reports/daily-report-generator.ts` + 11 report generator tests
+- Regression coverage for default-today incremental reflect behavior
+
+### Changed
+- Reflect now prints per-source collection counts in verbose / normal run output for easier diagnosis.
+
 ## [1.1.0-alpha.4] — 2026-04-27
 
 Rich candidate metadata for reporter integration.

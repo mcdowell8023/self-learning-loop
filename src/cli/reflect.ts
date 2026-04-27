@@ -16,6 +16,9 @@ import type { EnvFingerprint } from '../kernel/types.js';
 import { openCandidateStore } from '../store/candidate-store.js';
 import type { LLMClient, LLMCompleteOptions } from '../reflect/llm-client.js';
 import { createRealLLMClient, type LLMProviderConfig } from '../reflect/llm-client-real.js';
+import { bucketHash, collectDateBuckets } from '../reflect/event-sources.js';
+import { writeOrAppendDailyReport, type DailyReportData, type ReflectionRun } from '../reports/daily-report-generator.js';
+import type { Candidate } from '../kernel/types.js';
 
 // ---------------------------------------------------------------------------
 // CLI interface
@@ -46,6 +49,7 @@ const USAGE = [
   '  --to YYYY-MM-DD    End date (inclusive, default: yesterday)',
   '  --today            Shortcut: reflect on today\'s diary only',
   '  --provider <name>  LLM provider: openclaw | openai-compatible (overrides config)',
+  '  --reason <value>   Optional run reason tag (e.g. manual)',
   '  --verbose, -v      Show event previews and raw LLM responses',
   '  -h, --help         Show this help',
   '',
@@ -61,6 +65,7 @@ interface ParsedReflect {
   today?: boolean;
   verbose?: boolean;
   provider?: 'openclaw' | 'openai-compatible';
+  reason?: string;
   code?: number;
   message?: string;
 }
@@ -74,6 +79,7 @@ function parseReflectArgs(argv: string[]): ParsedReflect {
   let today = false;
   let verbose = false;
   let provider: 'openclaw' | 'openai-compatible' | undefined;
+  let reason: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -85,6 +91,11 @@ function parseReflectArgs(argv: string[]): ParsedReflect {
       const v = argv[++i] as 'openclaw' | 'openai-compatible' | undefined;
       if (v !== 'openclaw' && v !== 'openai-compatible') return { kind: 'error', code: 2, message: 'error: --provider must be openclaw or openai-compatible' };
       provider = v;
+    }
+    else if (a === '--reason') {
+      const v = argv[++i];
+      if (!v) return { kind: 'error', code: 2, message: 'error: --reason requires a value' };
+      reason = v;
     }
     else if (a === '--workspace') {
       const v = argv[++i];
@@ -106,7 +117,7 @@ function parseReflectArgs(argv: string[]): ParsedReflect {
       return { kind: 'error', code: 2, message: `error: unknown argument: ${a}` };
     }
   }
-  return { kind: 'ok', workspace, dryRun, source, from, to, today, verbose, provider };
+  return { kind: 'ok', workspace, dryRun, source, from, to, today, verbose, provider, reason };
 }
 
 // ---------------------------------------------------------------------------
@@ -393,14 +404,15 @@ function buildCandidatesSummary(store: unknown): Record<string, unknown> {
         let pending = 0, reviewing = 0, shadow = 0, graduated = 0;
         const highConf: { id: string; domain: string; confidence: number }[] = [];
         for (const c of all) {
-          switch (c.status) {
+          switch (c.state) {
             case 'pending': pending++; break;
             case 'reviewing': reviewing++; break;
             case 'shadow': shadow++; break;
             case 'graduated': graduated++; break;
           }
-          if (c.confidence >= 0.7) {
-            highConf.push({ id: c.id ?? c.strategy?.problem_category ?? 'unknown', domain: c.strategy?.scope ?? 'general', confidence: c.confidence });
+          const confidence = c.instances?.[0]?.assertions?.length ? 0.7 : 0;
+          if (confidence >= 0.7) {
+            highConf.push({ id: c.candidate_id ?? c.strategy?.problem_category ?? 'unknown', domain: c.strategy?.scope ?? 'general', confidence });
           }
         }
         summary.pending = pending;
@@ -480,20 +492,20 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
       toDate = today;
     } else if (parsed.from) {
       fromDate = parsed.from;
-      toDate = parsed.to ?? fmtDate((() => { const d = new Date(); d.setDate(d.getDate() - 1); return d; })());
+      toDate = parsed.to ?? fmtDate(new Date());
     } else {
-      // Default incremental: from watermark+1 to yesterday
+      // Default incremental: from watermark+1 to today
       const watermark = store.getWatermark();
-      const yesterday = fmtDate((() => { const d = new Date(); d.setDate(d.getDate() - 1); return d; })());
+      const today = fmtDate(new Date());
       if (watermark) {
         const next = new Date(watermark + 'T00:00:00');
         next.setDate(next.getDate() + 1);
         fromDate = fmtDate(next);
       } else {
-        // No watermark: default to yesterday only
-        fromDate = yesterday;
+        // No watermark: default to today so current work is collectable
+        fromDate = today;
       }
-      toDate = parsed.to ?? yesterday;
+      toDate = parsed.to ?? today;
     }
 
     if (fromDate > toDate) {
@@ -505,28 +517,23 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
     const dates = dateRange(fromDate, toDate);
     out(`📅 Processing dates: ${fromDate} → ${toDate} (${dates.length} day(s))\n`);
 
-    // Filter out already-processed dates (dedup by date+source_hash)
-    const loaded = loadSourceFilesForDates(workspace, dates);
-    files = loaded.files;
+    // Collect all configured sources for each date (memory / transcripts / learn-events / TODO git / KB)
+    const buckets = await collectDateBuckets(workspace, dates);
 
-    // Per-date dedup: skip dates whose source content hasn't changed
     for (const date of dates) {
-      const dateFiles = loaded.dateFileMap.get(date);
-      if (!dateFiles || dateFiles.length === 0) continue;
+      const bucket = buckets.get(date);
+      if (!bucket || bucket.events.length === 0) continue;
 
-      const content = dateFiles.map(f => readFileSync(f, 'utf-8')).join('\n');
-      const hash = createHash('sha256').update(content).digest('hex');
-
+      const hash = bucketHash(bucket);
       if (!parsed.dryRun && store.hasReflectionLog(date, hash)) {
         out(`   ⏭️  ${date} — already processed (same content)\n`);
         continue;
       }
 
       processedDates.push(date);
-      // Add events for this date
-      for (const f of dateFiles) {
-        events.push(...fileToEvents(f));
-      }
+      events.push(...bucket.events);
+      files.push(...bucket.files);
+      out(`   📦 ${date} — memory ${bucket.sourceCounts.memory ?? 0}, openclaw ${bucket.sourceCounts.openclaw ?? 0}, learn_events ${bucket.sourceCounts.learn_events ?? 0}, todo_git ${bucket.sourceCounts.todo_git ?? 0}, knowledge_base ${bucket.sourceCounts.knowledge_base ?? 0}\n`);
     }
   }
   out(`📖 Loaded ${events.length} events from ${files.length} file(s)\n`);
@@ -591,14 +598,14 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
     return { exitCode: 4, message: msg };
   }
 
-  writeAuditEvent(workspace, { event: 'reflect_started', provider: providerOverride ?? 'openclaw', events_count: events.length });
+  writeAuditEvent(workspace, { event: 'reflect_started', provider: providerOverride ?? 'openclaw', reason: parsed.reason ?? 'manual', events_count: events.length });
 
     const generator = new CandidateGenerator(llm, store);
 
     const input: ReflectInput = {
       events,
       env,
-      sessionId: `cli-reflect-${new Date().toISOString()}`,
+      sessionId: `cli-reflect-${parsed.reason ?? 'manual'}-${new Date().toISOString()}`,
       manual: true, // CLI invocation = manual trigger
     };
 
@@ -673,12 +680,11 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
 
     // Update watermark and reflection log for processed dates
     if (!parsed.dryRun && !parsed.source && processedDates.length > 0) {
+      const buckets = await collectDateBuckets(workspace, processedDates);
       for (const date of processedDates) {
-        const memDir = join(workspace, 'memory');
-        const dateFiles = readdirSync(memDir).filter(f => f.startsWith(date) && f.endsWith('.md')).map(f => join(memDir, f));
-        const content = dateFiles.map(f => readFileSync(f, 'utf-8')).join('\n');
-        const hash = createHash('sha256').update(content).digest('hex');
-        store.addReflectionLog(date, hash, result.persistedCount);
+        const bucket = buckets.get(date);
+        if (!bucket) continue;
+        store.addReflectionLog(date, bucketHash(bucket), result.persistedCount);
       }
       // Update watermark to the latest processed date
       const latestDate = processedDates[processedDates.length - 1]!;
@@ -721,12 +727,53 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
     // Collect new candidate IDs
     const newCandidateIds = result.candidates.map(c => c.strategy.strategy_id);
 
+    const generatedAt = new Date().toISOString();
+    const auditLogRelPath = `learn/audit/reflect-${fmtDate(new Date())}.jsonl`;
+    const rawEventRelPath = 'learn/events/reflection-completed.json';
+
+    const allCandidates = typeof (store as any).list === 'function' ? ((store as any).list({ limit: 1000 }) as Candidate[]) : [];
+    const candidatesByState = allCandidates.reduce((acc: Record<string, number>, candidate: Candidate) => {
+      acc[candidate.state] = (acc[candidate.state] ?? 0) + 1;
+      return acc;
+    }, {});
+    const staleBacklog = allCandidates.filter(candidate => candidate.state === 'pending' && ((Date.now() - new Date(candidate.created_at).getTime()) / 86400000) >= 4);
+    const reflectionRun: ReflectionRun = {
+      generatedAt,
+      eventsCollected: events.length,
+      candidatesGenerated: result.candidates.length,
+      candidatesDropped: result.dropped.length,
+      durationMs: reflectEndTs - reflectStartTs,
+      reasonsTriggered: result.triggerDecision?.reasons ?? [],
+      newCandidates: result.candidates.map(item => (store as any).get?.(item.strategy.strategy_id)).filter(Boolean) as Candidate[],
+      droppedItems: result.dropped,
+      auditLogPath: auditLogRelPath,
+      rawEventPath: rawEventRelPath,
+    };
+    const droppedSummaryForReport = result.dropped.reduce((acc: Record<string, typeof result.dropped>, item) => {
+      const key = item.reason_code ?? 'other';
+      (acc[key] ??= []).push(item);
+      return acc;
+    }, {} as Record<string, typeof result.dropped>);
+    const reportData: DailyReportData = {
+      date: fmtDate(new Date()),
+      reflectionRuns: [reflectionRun],
+      totalCandidates: allCandidates.length,
+      candidatesByState,
+      newCandidatesToday: reflectionRun.newCandidates,
+      staleBacklog,
+      candidateSnapshot: allCandidates,
+      droppedSummary: droppedSummaryForReport,
+    };
+    const reportPath = !parsed.dryRun ? await writeOrAppendDailyReport(workspace, reportData, { generatedAt, auditLogPath: auditLogRelPath, rawEventPath: rawEventRelPath }) : join(workspace, 'learn', 'reports', `${fmtDate(new Date())}-daily.md`);
+    const reportPathRelative = reportPath.startsWith(`${workspace}/`) ? reportPath.slice(workspace.length + 1) : reportPath;
+
     const eventData = {
       event: 'reflection-completed',
       version: '1.1',
-      timestamp: new Date().toISOString(),
+      timestamp: generatedAt,
       runtime: 'openclaw',
       workspace,
+      report_path: reportPathRelative,
       reflection: {
         from: parsed.from ?? processedDates[0] ?? null,
         to: parsed.to ?? processedDates[processedDates.length - 1] ?? null,
@@ -748,6 +795,9 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
 
     // ── A4: Reporter hook ────────────────────────────────────────
     const eventFilePath = join(workspace, 'learn', 'events', 'reflection-completed.json');
+    if (!parsed.dryRun) {
+      out(`\n📝 Daily report written: ${reportPathRelative}\n`);
+    }
     invokeReporterHook(eventFilePath, workspace, out, err);
 
     return { exitCode: (result.error && result.candidates.length === 0 && result.dropped.length === 0) ? 0 : (result.error ? 1 : 0) };

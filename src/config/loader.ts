@@ -81,7 +81,7 @@ function defaultProjectPath(env: NodeJS.ProcessEnv): string {
 }
 
 function defaultUserPath(): string {
-  return resolve(homedir(), '.openclaw', 'learn', 'config.yaml');
+  return resolve(homedir(), '.openclaw', 'workspace', 'learn', 'config.yaml');
 }
 
 function safeReadYaml(path: string): {

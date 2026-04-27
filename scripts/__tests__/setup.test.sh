@@ -170,7 +170,7 @@ assert "CLI wrapper created" test -f "$BIN_PATH"
 assert "CLI wrapper is executable" test -x "$BIN_PATH"
 
 # Verify data dir
-DATA_DIR="$FAKE_HOME/.openclaw/learn"
+DATA_DIR="$FAKE_HOME/.openclaw/workspace/learn"
 assert "data dir created" test -d "$DATA_DIR"
 
 # Idempotent: run again, should not fail
@@ -209,7 +209,7 @@ setup_fake_home
 run_setup --mode local --runtime openclaw >/dev/null 2>&1 || true
 run_uninstall --force --keep-data >/dev/null 2>&1 || true
 SKILL_DIR="$FAKE_HOME/.openclaw/workspace/skills/self-learning-loop"
-DATA_DIR="$FAKE_HOME/.openclaw/learn"
+DATA_DIR="$FAKE_HOME/.openclaw/workspace/learn"
 assert "keep-data: skill dir removed" test ! -e "$SKILL_DIR"
 assert "keep-data: data dir preserved" test -d "$DATA_DIR"
 cleanup_fake_home

@@ -5,6 +5,28 @@ All notable changes to @openclaw/self-learning-loop will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0-alpha.3] — 2026-04-27
+
+Bug fixes + event hook system for reporter integration.
+
+### Fixed
+- **Bug #1 路径不一致**: `setup.sh` の `get_init_workspace("openclaw")` 返回 `~/.openclaw/workspace`（之前错误地返回 `~/.openclaw`），CLI workspace-resolver 自动探测路径同步修正
+- **Bug #2 cron 签名过期**: `register-cron.sh` 从已废弃的 `--every/--at` 更新为 `--name/--cron` 新签名
+- Config loader 默认用户配置路径对齐到 `~/.openclaw/workspace/learn/config.yaml`
+
+### Added
+- 事件落盘: reflect 完成后写入 `events/reflection-completed.json`（atomic write，失败也记录）
+- Reporter 钩子: reflect 完成后自动探测 `learning-loop-reporter` skill 并调用，不存在时静默跳过
+- `findReporterSkill()` 探测链：skills 目录 → `~/.local/bin/` CLI
+- `buildCandidatesSummary()` 在事件中包含候选状态总览
+- Audit 事件: `reporter_skipped` / `reporter_invoked`
+
+### Changed
+- Daily reflect 默认调度时间从 04:30 → 07:00（避免凌晨过早噪音）
+
+### Removed
+- 删除作废的 `scripts/daily-reflect-and-report.sh`（错误的 wrapper 思路）
+
 ## [1.1.0-alpha.1] — 2026-04-25
 
 First public alpha. Complete rewrite from P1a baseline with cross-runtime support.

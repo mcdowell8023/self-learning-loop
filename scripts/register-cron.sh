@@ -9,7 +9,7 @@ set -euo pipefail
 
 DRY_RUN=false
 UNREGISTER=false
-SCHEDULE="30 4 * * *"
+SCHEDULE="0 7 * * *"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -58,12 +58,19 @@ if [[ "$RUNTIME" == "openclaw" ]]; then
       fi
     fi
   else
+    CRON_MSG="exec: bash ${REFLECT_SCRIPT}"
     if $DRY_RUN; then
-      echo "[dry-run] Would run: openclaw cron add --every '24h' --at '04:30' --cmd 'bash ${REFLECT_SCRIPT}'"
-      echo "[dry-run] Equivalent schedule: ${SCHEDULE}"
+      echo "[dry-run] Would run: openclaw cron add --name self-learning-loop-daily-reflect --cron '${SCHEDULE}' --tz Asia/Shanghai --session isolated --tools exec,read --model github-copilot/claude-haiku-4.5 --message '${CRON_MSG}'"
     else
-      openclaw cron add --every "24h" --at "04:30" --cmd "bash ${REFLECT_SCRIPT}"
-      echo "Registered openclaw cron for daily-reflect at 04:30."
+      openclaw cron add \
+        --name "self-learning-loop-daily-reflect" \
+        --cron "${SCHEDULE}" \
+        --tz "Asia/Shanghai" \
+        --session isolated \
+        --tools "exec,read" \
+        --model "github-copilot/claude-haiku-4.5" \
+        --message "${CRON_MSG}"
+      echo "Registered openclaw cron for daily-reflect (${SCHEDULE})."
     fi
   fi
   exit 0

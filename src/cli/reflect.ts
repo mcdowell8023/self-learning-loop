@@ -4,10 +4,11 @@
 //
 // 流程: 加载 config → 读反思源 → trigger 判定 → candidate-generator → 写入 Store (除非 --dry-run)
 
-import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, appendFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, appendFileSync, writeFileSync, renameSync } from 'node:fs';
 import { isAbsolute, join, resolve, basename } from 'node:path';
 import { arch, platform } from 'node:os';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 
 import { CandidateGenerator, type ReflectInput } from '../reflect/candidate-generator.js';
 import type { SessionEvent } from '../reflect/reflection-prompt.js';
@@ -329,6 +330,91 @@ class DryRunStore {
 }
 
 // ---------------------------------------------------------------------------
+// Event writing + Reporter hook (A3/A4)
+// ---------------------------------------------------------------------------
+
+export function writeReflectionEvent(workspace: string, eventData: Record<string, unknown>): void {
+  const eventsDir = join(workspace, 'learn', 'events');
+  mkdirSync(eventsDir, { recursive: true });
+  const tmpPath = join(eventsDir, '.reflection-completed.json.tmp');
+  const finalPath = join(eventsDir, 'reflection-completed.json');
+  writeFileSync(tmpPath, JSON.stringify(eventData, null, 2) + '\n', 'utf-8');
+  renameSync(tmpPath, finalPath);
+}
+
+export function findReporterSkill(homeOverride?: string): string | null {
+  const home = homeOverride ?? (process.env.HOME ?? '/tmp');
+  const skillPath = join(home, '.openclaw', 'workspace', 'skills', 'learning-loop-reporter', 'SKILL.md');
+  if (existsSync(skillPath)) {
+    const binPath = join(home, '.local', 'bin', 'learning-loop-reporter');
+    if (existsSync(binPath)) return binPath;
+  }
+  const binPath = join(home, '.local', 'bin', 'learning-loop-reporter');
+  if (existsSync(binPath)) return binPath;
+  return null;
+}
+
+function invokeReporterHook(
+  eventFilePath: string,
+  workspace: string,
+  out: (s: string) => void,
+  errFn: (s: string) => void,
+): void {
+  const reporter = findReporterSkill();
+  if (!reporter) {
+    writeAuditEvent(workspace, { event: 'reporter_skipped', reason: 'reporter skill not installed, skipping notification' });
+    return;
+  }
+  try {
+    const result = spawnSync(reporter, ['notify', '--event', eventFilePath], {
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf-8',
+    });
+    if (result.status === 0) {
+      writeAuditEvent(workspace, { event: 'reporter_invoked', status: 'success' });
+      out('\n📬 Reporter notification sent successfully.\n');
+    } else {
+      writeAuditEvent(workspace, { event: 'reporter_invoked', status: 'failed', exitCode: result.status, stderr: result.stderr?.slice(0, 500) });
+      errFn(`\n⚠️ Reporter failed (exit ${result.status}): ${result.stderr?.slice(0, 200)}\n`);
+    }
+  } catch (e) {
+    writeAuditEvent(workspace, { event: 'reporter_invoked', status: 'error', error: (e as Error).message });
+    errFn(`\n⚠️ Reporter error: ${(e as Error).message}\n`);
+  }
+}
+
+function buildCandidatesSummary(store: unknown): Record<string, unknown> {
+  const summary: Record<string, unknown> = { pending: 0, reviewing: 0, shadow: 0, graduated: 0, high_confidence: [] };
+  try {
+    if (store && typeof (store as any).list === 'function') {
+      const all = (store as any).list({ limit: 1000 });
+      if (Array.isArray(all)) {
+        let pending = 0, reviewing = 0, shadow = 0, graduated = 0;
+        const highConf: { id: string; domain: string; confidence: number }[] = [];
+        for (const c of all) {
+          switch (c.status) {
+            case 'pending': pending++; break;
+            case 'reviewing': reviewing++; break;
+            case 'shadow': shadow++; break;
+            case 'graduated': graduated++; break;
+          }
+          if (c.confidence >= 0.7) {
+            highConf.push({ id: c.id ?? c.strategy?.problem_category ?? 'unknown', domain: c.strategy?.scope ?? 'general', confidence: c.confidence });
+          }
+        }
+        summary.pending = pending;
+        summary.reviewing = reviewing;
+        summary.shadow = shadow;
+        summary.graduated = graduated;
+        summary.high_confidence = highConf;
+      }
+    }
+  } catch { /* best-effort */ }
+  return summary;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -368,6 +454,9 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
     : openCandidateStore({ dbPath, candidatesDir });
 
   try {
+
+  const reflectStartTs = Date.now();
+  const watermarkBefore = store.getWatermark?.() ?? null;
 
   // Determine date range
   let events: SessionEvent[] = [];
@@ -600,6 +689,34 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
       persisted: result.persistedCount,
       error: result.error ?? null,
     });
+
+    // ── A3: Write reflection-completed event ─────────────────────
+    const reflectEndTs = Date.now();
+    const eventData = {
+      event: 'reflection-completed',
+      version: '1.0',
+      timestamp: new Date().toISOString(),
+      runtime: 'openclaw',
+      workspace,
+      reflection: {
+        from: parsed.from ?? processedDates[0] ?? null,
+        to: parsed.to ?? processedDates[processedDates.length - 1] ?? null,
+        watermark_before: watermarkBefore ?? null,
+        watermark_after: store?.getWatermark?.() ?? null,
+        duration_ms: reflectEndTs - reflectStartTs,
+        events_collected: events.length,
+        candidates_generated: result.candidates.length,
+        candidates_dropped: result.dropped.length,
+        reasons_triggered: result.triggerDecision?.reasons ?? [],
+      },
+      candidates_summary: buildCandidatesSummary(store),
+      errors: result.error ? [result.error] : [],
+    };
+    writeReflectionEvent(workspace, eventData);
+
+    // ── A4: Reporter hook ────────────────────────────────────────
+    const eventFilePath = join(workspace, 'learn', 'events', 'reflection-completed.json');
+    invokeReporterHook(eventFilePath, workspace, out, err);
 
     return { exitCode: (result.error && result.candidates.length === 0 && result.dropped.length === 0) ? 0 : (result.error ? 1 : 0) };
   } finally {

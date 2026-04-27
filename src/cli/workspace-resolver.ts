@@ -48,7 +48,7 @@ export function resolveWorkspace(opts: ResolveOptions = {}): ResolvedWorkspace {
 
   // 4. Auto-detect: probe known runtime paths
   const candidates = [
-    join(home, '.openclaw'),
+    join(home, '.openclaw', 'workspace'),
     join(home, '.local', 'share', 'opencode'),
     join(home, '.claude'),
     join(home, '.codex'),

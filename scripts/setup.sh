@@ -94,7 +94,7 @@ get_skill_link_target() {
 get_data_dir() {
   local rt="$1"
   case "$rt" in
-    openclaw)    echo "$HOME_DIR/.openclaw/learn" ;;
+    openclaw)    echo "$HOME_DIR/.openclaw/workspace/learn" ;;
     claude-code) echo "$HOME_DIR/.claude/learn" ;;
     opencode)    echo "$HOME_DIR/.local/share/opencode/learn" ;;
     codex)       echo "${CODEX_DATA_PATH:-$HOME_DIR/.codex/learn}" ;;
@@ -105,7 +105,7 @@ get_data_dir() {
 get_init_workspace() {
   local rt="$1"
   case "$rt" in
-    openclaw)    echo "$HOME_DIR/.openclaw" ;;
+    openclaw)    echo "$HOME_DIR/.openclaw/workspace" ;;
     claude-code) echo "$HOME_DIR/.claude" ;;
     opencode)    echo "$HOME_DIR/.local/share/opencode" ;;
     codex)       echo "${CODEX_DATA_PATH:-$HOME_DIR/.codex}" ;;

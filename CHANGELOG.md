@@ -5,6 +5,18 @@ All notable changes to @openclaw/self-learning-loop will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0-alpha.6] — 2026-04-27
+
+Reporter CLI alignment release: remove legacy `--event` invocations and switch reflect reporter hook to `notify --report`.
+
+### Fixed
+- Reflect reporter hook now invokes `learning-loop-reporter notify --report <daily-report-path>` instead of the removed legacy `--event` flag.
+- Release note references updated to match reporter v0.5.0 CLI.
+- Reporter audit payload now records `report_path` for success / failure / error cases.
+
+### Added
+- Regression tests covering reporter notify args and verifying reflect hook no longer passes `--event`.
+
 ## [1.1.0-alpha.5] — 2026-04-27
 
 Core reflect collection fix + built-in markdown daily reports.

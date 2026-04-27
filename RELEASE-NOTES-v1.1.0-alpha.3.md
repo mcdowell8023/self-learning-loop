@@ -27,7 +27,7 @@ Previous: v1.1.0-alpha.2
 
 ### Reporter 钩子
 - reflect 完成后自动探测 `learning-loop-reporter` skill
-- 存在 → 调用 `learning-loop-reporter notify --event <path>`
+- 存在 → 调用 `learning-loop-reporter notify --report <daily-report-path>`
 - 不存在 → 静默跳过 + audit 日志记录
 - reporter 失败不影响 reflect 主流程（解耦设计）
 

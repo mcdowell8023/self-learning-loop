@@ -2,9 +2,9 @@
 //
 // Tests for A3 (event writing) + A4 (reporter hook) functionality
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { findReporterSkill, writeReflectionEvent } from '../reflect.js';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { buildReporterNotifyArgs, findReporterSkill, invokeReporterHook, writeReflectionEvent } from '../reflect.js';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -89,5 +89,54 @@ describe('writeReflectionEvent', () => {
     writeReflectionEvent(tmpWs, { event: 'test' });
     const tmpPath = join(tmpWs, 'learn', 'events', '.reflection-completed.json.tmp');
     expect(existsSync(tmpPath)).toBe(false);
+  });
+});
+
+describe('reporter notify args', () => {
+  let tmpHome: string;
+  let tmpWs: string;
+
+  beforeEach(() => {
+    tmpHome = join(tmpdir(), `reflect-reporter-home-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    tmpWs = join(tmpdir(), `reflect-reporter-ws-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tmpHome, { recursive: true });
+    mkdirSync(tmpWs, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tmpHome, { recursive: true, force: true });
+    rmSync(tmpWs, { recursive: true, force: true });
+  });
+
+  it('builds notify args with --report instead of legacy --event', () => {
+    expect(buildReporterNotifyArgs('/tmp/report.md')).toEqual(['notify', '--report', '/tmp/report.md']);
+  });
+
+  it('invokeReporterHook calls reporter with --report and never --event', () => {
+    const skillDir = join(tmpHome, '.openclaw', 'workspace', 'skills', 'learning-loop-reporter');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, 'SKILL.md'), '# Reporter');
+
+    const binDir = join(tmpHome, '.local', 'bin');
+    mkdirSync(binDir, { recursive: true });
+    const binPath = join(binDir, 'learning-loop-reporter');
+    const capturePath = join(tmpWs, 'reporter-args.txt');
+    writeFileSync(
+      binPath,
+      `#!/bin/sh\nprintf '%s\\n' "$@" > "${capturePath}"\nexit 0\n`,
+    );
+    chmodSync(binPath, 0o755);
+
+    const prevHome = process.env.HOME;
+    process.env.HOME = tmpHome;
+    try {
+      invokeReporterHook('/tmp/fake-daily-report.md', tmpWs, () => {}, () => {});
+    } finally {
+      process.env.HOME = prevHome;
+    }
+
+    const args = readFileSync(capturePath, 'utf-8').trim().split('\n');
+    expect(args).toEqual(['notify', '--report', '/tmp/fake-daily-report.md']);
+    expect(args).not.toContain('--event');
   });
 });

@@ -365,8 +365,12 @@ export function findReporterSkill(homeOverride?: string): string | null {
   return null;
 }
 
-function invokeReporterHook(
-  eventFilePath: string,
+export function buildReporterNotifyArgs(reportPath: string): string[] {
+  return ['notify', '--report', reportPath];
+}
+
+export function invokeReporterHook(
+  reportPath: string,
   workspace: string,
   out: (s: string) => void,
   errFn: (s: string) => void,
@@ -377,20 +381,20 @@ function invokeReporterHook(
     return;
   }
   try {
-    const result = spawnSync(reporter, ['notify', '--event', eventFilePath], {
+    const result = spawnSync(reporter, buildReporterNotifyArgs(reportPath), {
       timeout: 30000,
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf-8',
     });
     if (result.status === 0) {
-      writeAuditEvent(workspace, { event: 'reporter_invoked', status: 'success' });
-      out('\n📬 Reporter notification sent successfully.\n');
+      writeAuditEvent(workspace, { event: 'reporter_invoked', status: 'success', report_path: reportPath });
+      out(`\n📬 Reporter notification sent successfully (${reportPath}).\n`);
     } else {
-      writeAuditEvent(workspace, { event: 'reporter_invoked', status: 'failed', exitCode: result.status, stderr: result.stderr?.slice(0, 500) });
+      writeAuditEvent(workspace, { event: 'reporter_invoked', status: 'failed', report_path: reportPath, exitCode: result.status, stderr: result.stderr?.slice(0, 500) });
       errFn(`\n⚠️ Reporter failed (exit ${result.status}): ${result.stderr?.slice(0, 200)}\n`);
     }
   } catch (e) {
-    writeAuditEvent(workspace, { event: 'reporter_invoked', status: 'error', error: (e as Error).message });
+    writeAuditEvent(workspace, { event: 'reporter_invoked', status: 'error', report_path: reportPath, error: (e as Error).message });
     errFn(`\n⚠️ Reporter error: ${(e as Error).message}\n`);
   }
 }
@@ -794,11 +798,10 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
     writeReflectionEvent(workspace, eventData);
 
     // ── A4: Reporter hook ────────────────────────────────────────
-    const eventFilePath = join(workspace, 'learn', 'events', 'reflection-completed.json');
     if (!parsed.dryRun) {
       out(`\n📝 Daily report written: ${reportPathRelative}\n`);
     }
-    invokeReporterHook(eventFilePath, workspace, out, err);
+    invokeReporterHook(reportPath, workspace, out, err);
 
     return { exitCode: (result.error && result.candidates.length === 0 && result.dropped.length === 0) ? 0 : (result.error ? 1 : 0) };
   } finally {

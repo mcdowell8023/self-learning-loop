@@ -31,6 +31,9 @@ detect_workspace() {
 
 WORKSPACE="$(detect_workspace)" || {
   echo '{"ts":"'"$(date -Iseconds)"'","level":"error","msg":"No workspace found"}' >&2
+  echo "❌ daily-reflect.sh FAILED"
+  echo "Stage: workspace_detect"
+  echo "Error: No workspace found"
   exit 1
 }
 
@@ -113,6 +116,16 @@ CMD="$(build_cmd)" || {
   exit 1
 }
 
+# ── Helper: surface failure to stdout (for cron agent capture) ────
+fail_stdout() {
+  local stage="$1" error="$2"
+  # Print structured summary so cron agents see it on stdout
+  echo "❌ daily-reflect.sh FAILED"
+  echo "Stage: ${stage}"
+  echo "Error: ${error}"
+  echo "Log: ${LOG_FILE}"
+}
+
 # ── Execute ───────────────────────────────────────────────────────
 if $DRY_RUN; then
   jlog "info" "dry-run: would execute: $CMD"
@@ -127,5 +140,38 @@ if eval "$CMD" >> "$LOG_FILE" 2>&1; then
 else
   EXIT_CODE=$?
   jlog "error" "Daily reflect FAILED (exit $EXIT_CODE)" >> "$LOG_FILE"
+  fail_stdout "reflect" "reflect command exited with code $EXIT_CODE"
   exit $EXIT_CODE
+fi
+
+# ── Post-run: invoke reporter + verify delivery marker (T-046) ──
+if command -v learning-loop-reporter &>/dev/null; then
+  jlog "info" "Invoking reporter notify --date $DATE" >> "$LOG_FILE"
+  if ! learning-loop-reporter notify --date "$DATE" >> "$LOG_FILE" 2>&1; then
+    jlog "error" "Reporter notify exited non-zero" >> "$LOG_FILE"
+    fail_stdout "reporter_notify" "learning-loop-reporter notify failed"
+    exit 1
+  fi
+
+  # Read delivery marker written by reporter
+  MARKER_FILE="${WORKSPACE}/learn/reports/.delivered/${DATE}.json"
+  if [[ ! -f "$MARKER_FILE" ]]; then
+    jlog "error" "Delivery marker missing after reporter notify" >> "$LOG_FILE"
+    fail_stdout "delivery_verify" "No marker at $MARKER_FILE"
+    exit 1
+  fi
+
+  MSG_ID=$(python3 -c "import json,sys;d=json.load(open('$MARKER_FILE'));print(d.get('messageId',''))" 2>/dev/null || echo "")
+  if [[ -z "$MSG_ID" ]]; then
+    jlog "error" "Delivery marker has no messageId" >> "$LOG_FILE"
+    fail_stdout "delivery_verify" "Marker exists but messageId empty"
+    exit 1
+  fi
+
+  echo "投递验证通过 messageId=${MSG_ID}"
+  jlog "info" "Delivery verified messageId=${MSG_ID}" >> "$LOG_FILE"
+else
+  jlog "error" "learning-loop-reporter not found in PATH" >> "$LOG_FILE"
+  fail_stdout "reporter_missing" "learning-loop-reporter command not found"
+  exit 1
 fi

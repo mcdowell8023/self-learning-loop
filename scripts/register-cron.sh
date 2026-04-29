@@ -73,6 +73,39 @@ if [[ "$RUNTIME" == "openclaw" ]]; then
       echo "Registered openclaw cron for daily-reflect (${SCHEDULE})."
     fi
   fi
+  # ── Also register weekly-delivery-audit cron (T-046) ──────────
+  AUDIT_SCRIPT="${SCRIPT_DIR}/weekly-delivery-audit.sh"
+  AUDIT_TAG="# learning-loop-weekly-audit"
+  if [[ -f "$AUDIT_SCRIPT" ]]; then
+    AUDIT_MSG="exec: bash ${AUDIT_SCRIPT}"
+    if $UNREGISTER; then
+      AUDIT_ID="$(openclaw cron list 2>/dev/null | grep -i 'weekly-audit' | head -1 | awk '{print $1}' || true)"
+      if [[ -n "$AUDIT_ID" ]]; then
+        openclaw cron remove "$AUDIT_ID"
+        echo "Removed openclaw cron: weekly-delivery-audit ($AUDIT_ID)"
+      fi
+    else
+      if $DRY_RUN; then
+        echo "[dry-run] Would run: openclaw cron add --name self-learning-loop-weekly-audit --cron '0 1 * * 1' --tz Asia/Shanghai --session isolated --tools exec,read --model github-copilot/claude-haiku-4.5 --message '${AUDIT_MSG}'"
+      else
+        # Check if already registered
+        if openclaw cron list 2>/dev/null | grep -qi 'weekly-audit'; then
+          echo "Weekly audit cron already registered."
+        else
+          openclaw cron add \
+            --name "self-learning-loop-weekly-audit" \
+            --cron "0 1 * * 1" \
+            --tz "Asia/Shanghai" \
+            --session isolated \
+            --tools "exec,read" \
+            --model "github-copilot/claude-haiku-4.5" \
+            --message "${AUDIT_MSG}"
+          echo "Registered openclaw cron for weekly-delivery-audit (Monday 09:00 UTC+8 = 0 1 * * 1 UTC)."
+        fi
+      fi
+    fi
+  fi
+
   exit 0
 fi
 

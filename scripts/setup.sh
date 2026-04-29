@@ -406,6 +406,47 @@ main() {
     run_init "$init_ws"
   fi
 
+  # ── Mandatory reporter setup + health (T-046) ──────────────
+  echo ""
+  info "=== Reporter dependency check ==="
+  local reporter_dir="${REPORTER_PROJECT_DIR:-$(dirname "$REPO_DIR")/learning-loop-reporter}"
+  if [[ -f "$reporter_dir/scripts/setup.sh" ]]; then
+    info "Running reporter setup from: $reporter_dir"
+    if $DRY_RUN; then
+      dry "bash $reporter_dir/scripts/setup.sh"
+    else
+      bash "$reporter_dir/scripts/setup.sh" || {
+        err "Reporter setup FAILED. Install cannot continue."
+        err "Fix: cd $reporter_dir && bash scripts/setup.sh"
+        exit 1
+      }
+    fi
+    # Double-check health even after reporter setup reports success
+    if ! $DRY_RUN; then
+      if command -v learning-loop-reporter &>/dev/null; then
+        info "Verifying reporter health..."
+        if learning-loop-reporter health; then
+          ok "Reporter health check passed"
+        else
+          err "Reporter health check FAILED after setup"
+          exit 1
+        fi
+      else
+        err "learning-loop-reporter not found in PATH after setup"
+        err "Ensure ~/.local/bin is in PATH"
+        exit 1
+      fi
+    fi
+  else
+    err "Reporter project not found at: $reporter_dir"
+    err "Cannot complete setup without learning-loop-reporter."
+    err ""
+    err "Fix options:"
+    err "  1. Clone reporter to $(dirname "$REPO_DIR")/learning-loop-reporter/"
+    err "  2. Set REPORTER_PROJECT_DIR=/path/to/learning-loop-reporter"
+    exit 1
+  fi
+
   echo ""
   ok "=== Setup complete! ==="
   echo ""

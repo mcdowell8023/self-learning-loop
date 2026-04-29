@@ -18,6 +18,7 @@ import { runReflect } from './reflect.js';
 import { runRepair } from './repair.js';
 import { runReview } from './review.js';
 import { runAudit } from './audit.js';
+import { runEvaluate, runEvaluateAll } from './evaluate.js';
 import { runConfigShow } from './config-show.js';
 import { reloadConfig, loadConfig } from '../config/loader.js';
 
@@ -31,6 +32,8 @@ const TOP_USAGE = [
   '  status [id]            List candidates or show single candidate details.',
   '  reflect              Run a reflection pass (analyse memory, generate candidates).',
   '  review <sub> ...      Query review gate results (list / show).',
+  '  evaluate <id>         Run ReviewGate on a single candidate (dry-run by default).',
+  '  evaluate-all          Run ReviewGate on all pending candidates (dry-run by default).',
   '  override <sub> ...     Force-graduate / force-retire / revert a candidate.',
   '  audit <sub> ...        Query audit log (list / replay / stats).',
   '  config <sub>           Config management (show / reload).',
@@ -79,6 +82,14 @@ export async function runLearn(opts: LearnRunOptions): Promise<LearnResult> {
     case 'review': {
       const r = await runReview({ argv: rest, cwd, stdout: out, stderr: err });
       return { exitCode: r.exitCode, command: 'review', subResult: r };
+    }
+    case 'evaluate': {
+      const r = await runEvaluate({ argv: rest, cwd, stdout: out, stderr: err });
+      return { exitCode: r.exitCode, command: 'evaluate', subResult: r };
+    }
+    case 'evaluate-all': {
+      const r = await runEvaluateAll({ argv: rest, cwd, stdout: out, stderr: err });
+      return { exitCode: r.exitCode, command: 'evaluate-all', subResult: r };
     }
     case 'override': {
       const r = await runOverride({ argv: rest, cwd, stdout: out, stderr: err });

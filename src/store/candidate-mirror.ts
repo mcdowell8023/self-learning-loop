@@ -6,6 +6,30 @@ import { mkdirSync, writeFileSync, renameSync, existsSync, readFileSync, unlinkS
 import { join, dirname } from 'node:path';
 import YAML from 'yaml';
 import type { Candidate } from '../kernel/types.js';
+import type { ReviewResult } from '../review/types.js';
+
+// ---------------------------------------------------------------------------
+// Mirror context (T-055): optional plumbing for evaluation result + history
+// ---------------------------------------------------------------------------
+
+/** State transition record (matches CandidateStore.getTransitions row shape). */
+export interface StateTransitionRecord {
+  from_state: string;
+  to_state: string;
+  action: string;
+  actor: string;
+  dormant_reason: string | null;
+  transitioned_at: string;
+}
+
+/** Optional context passed to {@link renderMirror} so that frontmatter can
+ *  surface `last_evaluated_at`, `evaluation_result` and `verdict_history`. */
+export interface MirrorContext {
+  /** Full transition history for the candidate (chronological). */
+  transitions?: StateTransitionRecord[];
+  /** Latest ReviewGate result (if a review just ran). */
+  latestReviewResult?: ReviewResult;
+}
 
 // ---------------------------------------------------------------------------
 // Mirror path: <candidatesDir>/<date>/<shortHash>-<problemCategory>.md
@@ -30,7 +54,7 @@ export function mirrorPath(candidatesDir: string, candidate: Candidate): string 
 // Render candidate → markdown with YAML frontmatter
 // ---------------------------------------------------------------------------
 
-export function renderMirror(candidate: Candidate): string {
+export function renderMirror(candidate: Candidate, ctx?: MirrorContext): string {
   const s = candidate.strategy;
   const frontmatter: Record<string, unknown> = {
     id: candidate.candidate_id,
@@ -43,6 +67,33 @@ export function renderMirror(candidate: Candidate): string {
     tags: s.tags ?? [],
     instance_count: candidate.instances.length,
   };
+
+  // T-055: evaluation metadata (only emitted when ctx provides it)
+  const transitions = ctx?.transitions;
+  if (transitions && transitions.length > 0) {
+    const last = transitions[transitions.length - 1]!;
+    frontmatter.last_evaluated_at = last.transitioned_at;
+    frontmatter.verdict_history = transitions.map((t) => ({
+      from_state: t.from_state,
+      to_state: t.to_state,
+      trigger: t.action,
+      transitioned_at: t.transitioned_at,
+    }));
+  }
+
+  if (ctx?.latestReviewResult) {
+    const r = ctx.latestReviewResult;
+    frontmatter.evaluation_result = {
+      pass: r.pass,
+      final_state: r.final_state,
+      ...(r.failed_at ? { failed_at: r.failed_at } : {}),
+      dimensions: r.dimensions.map((d) => ({
+        dimension: d.dimension,
+        pass: d.pass,
+        ...(d.code ? { code: d.code } : {}),
+      })),
+    };
+  }
 
   if (candidate.dormant_reason) {
     frontmatter.dormant_reason = candidate.dormant_reason;
@@ -106,13 +157,17 @@ export function renderMirror(candidate: Candidate): string {
 // Atomic write
 // ---------------------------------------------------------------------------
 
-export function writeMirror(candidatesDir: string, candidate: Candidate): string {
+export function writeMirror(
+  candidatesDir: string,
+  candidate: Candidate,
+  ctx?: MirrorContext,
+): string {
   const target = mirrorPath(candidatesDir, candidate);
   const tmpPath = target + '.tmp';
 
   mkdirSync(dirname(target), { recursive: true });
 
-  const content = renderMirror(candidate);
+  const content = renderMirror(candidate, ctx);
   writeFileSync(tmpPath, content, 'utf-8');
   renameSync(tmpPath, target);
   return target;
@@ -122,11 +177,15 @@ export function writeMirror(candidatesDir: string, candidate: Candidate): string
 // Check if mirror is up-to-date
 // ---------------------------------------------------------------------------
 
-export function isMirrorCurrent(candidatesDir: string, candidate: Candidate): boolean {
+export function isMirrorCurrent(
+  candidatesDir: string,
+  candidate: Candidate,
+  ctx?: MirrorContext,
+): boolean {
   const target = mirrorPath(candidatesDir, candidate);
   if (!existsSync(target)) return false;
   const existing = readFileSync(target, 'utf-8');
-  const expected = renderMirror(candidate);
+  const expected = renderMirror(candidate, ctx);
   return existing === expected;
 }
 

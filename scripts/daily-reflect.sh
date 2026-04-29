@@ -137,6 +137,17 @@ jlog "info" "Starting daily reflect (runtime=$RUNTIME)" >> "$LOG_FILE"
 
 if eval "$CMD" >> "$LOG_FILE" 2>&1; then
   jlog "info" "Daily reflect completed successfully" >> "$LOG_FILE"
+
+  # ── Post-reflect: optional evaluate-all ────────────────────────
+  if [[ "${EVALUATE_AFTER_REFLECT:-0}" == "1" ]]; then
+    jlog "info" "Running evaluate-all (post-reflect)" >> "$LOG_FILE"
+    CMD_EVALUATE="node ${LEARN_BIN} evaluate-all ${EVALUATE_FLAGS:-}"
+    if eval "$CMD_EVALUATE" >> "$LOG_FILE" 2>&1; then
+      jlog "info" "evaluate-all completed" >> "$LOG_FILE"
+    else
+      jlog "warn" "evaluate-all failed (non-fatal)" >> "$LOG_FILE"
+    fi
+  fi
 else
   EXIT_CODE=$?
   jlog "error" "Daily reflect FAILED (exit $EXIT_CODE)" >> "$LOG_FILE"

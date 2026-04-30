@@ -208,7 +208,6 @@ describe('runCycle :: verdict routing (high confidence)', () => {
     });
 
     const outcome = report.candidates[0]?.outcome;
-    if (outcome?.status !== 'graduated') console.log('DEBUG outcome:', JSON.stringify(outcome));
     expect(outcome?.status).toBe('graduated');
     expect(store.get(id)?.state).toBe('graduated');
 

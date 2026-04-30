@@ -271,4 +271,88 @@ describe('runCycle :: e2e (real shadow + matcher + evaluator + graduation)', () 
 
     expect(store.get(strategy.strategy_id)?.state).toBe('graduated');
   });
+
+  it('T-058c-Lite: mock-phase1a projection lifts assertion=[] trials → graduated', async () => {
+    // 验证 collector 的 mockPhase1aAssertions 路径：
+    // shadow-runner 默认写入 assertions=[] / completion_rate=0。
+    // 在 listTrials 读时投影为 mock pass + completion_rate=1，
+    // 配合 mock baseline=[0,...] → row #2 (L1 pass + L2 pass) → graduated。
+    // **TODO(T-058c v2):** 废除本路径后一同删除此 case。
+    const mockCollector = new TrialCollector({ store, batchSize: 1, mockPhase1aAssertions: true });
+    const mockRunner = new ShadowRunner({ store, collector: mockCollector });
+
+    const baseStrategy = {
+      problem_category: 'tmp_cleanup_v3_mock',
+      trigger_conditions: 'temporary files in /tmp accumulate after subagents',
+      recommended_action: 'rm -f /tmp/leftover-*',
+    };
+    const strategy: Strategy = {
+      ...baseStrategy,
+      strategy_id: computeStrategyId(baseStrategy),
+      scope: 'general',
+      summary: 'mock-phase1a graduation',
+      created_at: new Date().toISOString(),
+      instance_ids: [],
+    };
+    const baseInstance = {
+      strategy_id: strategy.strategy_id,
+      diff_summary: 'add cleanup',
+      env_fingerprint: ENV,
+    };
+    const instance: Instance = {
+      ...baseInstance,
+      instance_id: computeInstanceId(baseInstance),
+      files_touched: ['AGENTS.md'],
+      source_sessions: [
+        { session_id: 's-orig-mock', runtime: 'openclaw', timestamp: new Date().toISOString() },
+      ],
+      // 混合 spec：1 个 command_exit_code (会触发 secure_l1_required) +
+      // 1 个 regex_match。mock 路径下 L1=pass，所以 secure_l1 下调不会生效。
+      assertions: [
+        { type: 'command_exit_code', command: 'true', expected_exit_code: 0 },
+        { type: 'regex_match', description: 'check' },
+      ],
+      trial_results: [],
+      created_at: new Date().toISOString(),
+    };
+    store.create({ strategy, instances: [instance], initialState: 'pending' });
+    store.transition(strategy.strategy_id, 'pending', 'reviewing', 'start_review');
+    store.transition(strategy.strategy_id, 'reviewing', 'validating', 'review_passed');
+
+    // 驱动 5 个能命中的 session，shadow-runner 会写 trial（assertions 是空）
+    for (let i = 0; i < 5; i++) {
+      const events: SessionEvent[] = [
+        mkEvent('user_message', `please clean up the temporary files in /tmp/leftover-${i}`),
+        mkEvent('tool_call', `ls /tmp/leftover-${i}`, { tool_name: 'exec' }),
+        mkEvent(
+          'tool_result',
+          `found 3 temporary files in /tmp/leftover-${i}, ready for cleanup with rm`,
+        ),
+      ];
+      mockRunner.observe(`sess-mock-${i}`, events, ENV);
+    }
+    mockCollector.flush();
+
+    // db 中的 trial 原始 assertions 是 []，但 listTrials 会返回 mock 投影
+    const projected = mockCollector.listTrials(strategy.strategy_id);
+    expect(projected.length).toBeGreaterThan(0);
+    expect(projected[0]!.assertions.length).toBe(2);
+    expect(projected[0]!.assertions.every((a) => a.status === 'pass')).toBe(true);
+    expect(projected[0]!.metrics.completion_rate).toBe(1);
+
+    const report = await runCycle({
+      store,
+      collector: mockCollector,
+      runner: mockRunner,
+      executor,
+      runtimes: [],
+      thresholds: { min_trials: 3, max_trials: 20, high: 0.10, low: 0.05 },
+      baselineProvider: () => [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    });
+
+    expect(report.errors).toEqual([]);
+    const outcome = report.candidates[0]?.outcome;
+    expect(outcome?.status).toBe('graduated');
+    expect(store.get(strategy.strategy_id)?.state).toBe('graduated');
+  });
 });

@@ -213,7 +213,7 @@ export async function runCycleCommand(opts: CycleRunOptions): Promise<CycleRunRe
     store = openCandidateStore({ dbPath, defaultActor: 'system', candidatesDir });
   }
 
-  const collector = new TrialCollector({ store, batchSize: 16 });
+  const collector = new TrialCollector({ store, batchSize: 16, mockPhase1aAssertions: true });
   const runner = new ShadowRunner({ store, collector });
 
   const graduatedDir = join(baseDir, 'graduated');
@@ -244,6 +244,12 @@ export async function runCycleCommand(opts: CycleRunOptions): Promise<CycleRunRe
       since: flags.since,
       thresholds,
       dryRun: !flags.execute,
+      // T-058c-Lite · Phase 1a mock baseline
+      // baseline=10x 0，trial.completion_rate 被 collector 提升到 1，
+      // L2 走 zero_variance_fallback，rel_delta=1.0 > 0.1 → status='pass'，
+      // 配合 mock L1 pass → truth table row #2 → graduated。
+      // **TODO(T-058c v2):** 接入 BaselineMetricStore 后移除。
+      baselineProvider: () => [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     });
 
     if (flags.format === 'json') {

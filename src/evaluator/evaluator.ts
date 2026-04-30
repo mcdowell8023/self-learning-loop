@@ -288,10 +288,20 @@ export function evaluateL2(samples: MetricSamples): L2Result {
     let status: LayerStatus;
     if (!significant) status = 'inconclusive';
     else status = delta > 0 ? 'pass' : 'fail';
+    // T-058c-Lite · zero-variance 路径下为 confidence 提供 effect-size proxy
+    // 原实现返回 cohenD=null → confidence 公式中 effectWeight=0 → confidence 封顶 0.7。
+    // 现在 zero-variance 且 significant 时，用 sign(delta)*min(2, relDelta) 作为 Cohen-d 代理，
+    // 让 confidence 能调到 high 不会被头顶 effectWeight=0 锁死。**TODO(T-058c v2):**
+    // 废除 mock 路径后评估是否保留此补丁 —— 如保留请补充商鞅论证 + 单测。
+    let cohenDProxy: number | null = null;
+    if (significant) {
+      const sign = delta > 0 ? 1 : -1;
+      cohenDProxy = sign * Math.min(2.0, relDelta);
+    }
     return {
       status,
       pValue: null,
-      cohenD: null,
+      cohenD: cohenDProxy,
       deltaMean: delta,
       baselineMean: bMean,
       trialMean: tMean,

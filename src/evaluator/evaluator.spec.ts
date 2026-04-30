@@ -279,7 +279,12 @@ describe('evaluateL2', () => {
     expect(r.zeroVarianceFallback).toBe(true);
     expect(r.status).toBe('pass');
     expect(r.pValue).toBeNull();
-    expect(r.cohenD).toBeNull();
+    // T-058c-Lite: zero-variance significant path now exposes a Cohen-d proxy
+    // (sign(delta) * min(2, relDelta)) so confidence has a non-zero effect-weight.
+    // **TODO(T-058c v2):** 评估是否保留 proxy；若废除，恢复 toBeNull 断言。
+    expect(r.cohenD).not.toBeNull();
+    expect(r.cohenD!).toBeGreaterThan(0); // delta>0 → sign=+1
+    expect(Math.abs(r.cohenD!)).toBeLessThanOrEqual(2);
   });
 
   it('#106 zero-variance path: delta <= 10% -> inconclusive', () => {

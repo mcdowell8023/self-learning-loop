@@ -32,6 +32,15 @@ export interface CycleRunOptions {
   store?: CandidateStore;
   /** Inject candidatesDir for tests. */
   candidatesDir?: string;
+  /**
+   * T-058c-Lite/B1 · explicit opt-in for the Phase 1a mock-assertion path.
+   * When true, TrialCollector.listTrials projects assertion=[]/completion_rate=0
+   * trials into mock pass / completion_rate=1 AND a zero baselineProvider is
+   * injected, so dormant candidates can graduate end-to-end. **Off by default.**
+   * Programmatic callers (tests) can also set this directly without --mock-phase1a.
+   * **WARNING**: do NOT enable in cron/automation — this fakes assertion outcomes.
+   */
+  mockPhase1a?: boolean;
 }
 
 export interface CycleRunResult {
@@ -57,6 +66,11 @@ const USAGE = [
   '  --since <ISO-date>       Only consider sessions newer than this (default: epoch).',
   '  --format <fmt>           Output: table (default) | json',
   '  --workspace <path>       Override workspace dir.',
+  '  --mock-phase1a           **WARNING**: Phase 1a placeholder, fakes assertion outcomes',
+  '                           (mock L1 pass + zero baseline) so candidates can graduate',
+  '                           through the pipeline for testing. Do NOT enable in',
+  '                           cron/automation — will inject unvetted candidates into',
+  '                           AGENTS.md. Off by default. Removed in T-058c v2.',
   '  -h, --help               Show this help.',
   '',
 ].join('\n');
@@ -68,10 +82,11 @@ interface ParsedFlags {
   since?: Date;
   format: 'table' | 'json';
   workspace?: string;
+  mockPhase1a: boolean;
 }
 
 function parseFlags(argv: string[]): ParsedFlags | { error: string } {
-  const out: ParsedFlags = { help: false, execute: false, format: 'table' };
+  const out: ParsedFlags = { help: false, execute: false, format: 'table', mockPhase1a: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') {
@@ -109,6 +124,10 @@ function parseFlags(argv: string[]): ParsedFlags | { error: string } {
       const v = argv[++i];
       if (!v) return { error: '--workspace requires a path' };
       out.workspace = v;
+      continue;
+    }
+    if (a === '--mock-phase1a') {
+      out.mockPhase1a = true;
       continue;
     }
     return { error: `unknown argument: ${a}` };
@@ -213,7 +232,11 @@ export async function runCycleCommand(opts: CycleRunOptions): Promise<CycleRunRe
     store = openCandidateStore({ dbPath, defaultActor: 'system', candidatesDir });
   }
 
-  const collector = new TrialCollector({ store, batchSize: 16, mockPhase1aAssertions: true });
+  // T-058c-Lite/B1 · mock path is explicit-opt-in. CLI flag --mock-phase1a OR
+  // programmatic opts.mockPhase1a turns it on; otherwise default OFF so cron
+  // automation never silently graduates fake-asserted candidates.
+  const mockOn = opts.mockPhase1a === true || flags.mockPhase1a === true;
+  const collector = new TrialCollector({ store, batchSize: 16, mockPhase1aAssertions: mockOn });
   const runner = new ShadowRunner({ store, collector });
 
   const graduatedDir = join(baseDir, 'graduated');
@@ -244,12 +267,13 @@ export async function runCycleCommand(opts: CycleRunOptions): Promise<CycleRunRe
       since: flags.since,
       thresholds,
       dryRun: !flags.execute,
-      // T-058c-Lite · Phase 1a mock baseline
-      // baseline=10x 0，trial.completion_rate 被 collector 提升到 1，
-      // L2 走 zero_variance_fallback，rel_delta=1.0 > 0.1 → status='pass'，
-      // 配合 mock L1 pass → truth table row #2 → graduated。
-      // **TODO(T-058c v2):** 接入 BaselineMetricStore 后移除。
-      baselineProvider: () => [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      // T-058c-Lite/B1 · Phase 1a mock baseline — only injected when mock path is
+      // explicitly enabled. With mock OFF (default), no baselineProvider →
+      // candidates without real baseline data stay dormant/observed_only.
+      // L2 path: baseline=10x 0 + trial.completion_rate=1 (mock projection) →
+      // zero_variance_fallback rel_delta=1.0 > 0.1 → 'pass' → truth-table row #2.
+      // **TODO(T-058c v2):** 接入 BaselineMetricStore 后移除整段 mock 路径。
+      baselineProvider: mockOn ? () => [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] : undefined,
     });
 
     if (flags.format === 'json') {

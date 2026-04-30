@@ -391,6 +391,7 @@ async function applyVerdict(args: ApplyVerdictArgs): Promise<CandidateOutcome> {
           candidate,
           evalResult: result,
           trialCount,
+          trials: args.trials,
           executor,
         });
         return {

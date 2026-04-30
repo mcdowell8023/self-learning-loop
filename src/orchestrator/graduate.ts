@@ -119,6 +119,17 @@ export interface GraduateCandidateOptions {
   candidate: Candidate;
   evalResult: EvaluatorOutput;
   trialCount: number;
+  /**
+   * Trial results used for L2 metrics aggregation. SHOULD be the same set the
+   * evaluator consumed (i.e. `collector.listTrials(candidate_id)`), so the
+   * audit record reflects exactly what produced the verdict. When omitted we
+   * fall back to `candidate.instances[].trial_results` for backwards-compat
+   * with callers that don't have a TrialCollector handy (e.g. graduate.spec).
+   *
+   * Zhang Heng review (P2): cycle.ts now passes `input.trials` here so the
+   * graduate path and evaluator path are guaranteed to agree.
+   */
+  trials?: TrialResult[];
   /** Pre-built executor (e.g. from runCycle); if omitted, a new one is created. */
   executor?: GraduationExecutor;
   /** Required when `executor` is omitted. */
@@ -150,11 +161,12 @@ export function graduateCandidate(opts: GraduateCandidateOptions): GraduateResul
 
   const body = renderGraduatedBody(candidate);
 
-  // L2 delta aggregation needs the underlying trials. Take them off the
-  // candidate's instances (already populated in store.get path).
-  const allTrials: TrialResult[] = candidate.instances.flatMap(
-    (i) => i.trial_results ?? [],
-  );
+  // L2 delta aggregation needs the underlying trials. Prefer the explicitly
+  // provided list (from collector, matches what evaluator saw); fall back to
+  // candidate.instances[].trial_results for backwards-compat callers.
+  const allTrials: TrialResult[] =
+    opts.trials ??
+    candidate.instances.flatMap((i) => i.trial_results ?? []);
 
   return executor.graduate({
     candidate,

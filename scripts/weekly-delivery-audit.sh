@@ -20,27 +20,52 @@ if [[ -z "$ALERT_TARGET" ]]; then
   exit 1
 fi
 
+# ── Configuration ────────────────────────────────────────────────
+ALERT_THRESHOLD=${AUDIT_ALERT_THRESHOLD:-2}  # consecutive days to trigger alert
+
 # ── Scan past 7 days ─────────────────────────────────────────────
 MISSING=0
 FAILED=0
 DETAILS=""
+CONSEC_CURRENT=0
+CONSEC_MAX=0
+CONSEC_START=""
+CONSEC_MAX_START=""
+CONSEC_MAX_END=""
 
-for i in $(seq 0 6); do
+# Iterate from oldest to newest for streak detection
+for i in $(seq 6 -1 0); do
   DATE=$(date -d "-${i} days" +%Y-%m-%d)
   MARKER="$MARKER_DIR/$DATE.json"
+  DAY_BAD=false
   if [[ ! -f "$MARKER" ]]; then
     ((MISSING++)) || true
     DETAILS="${DETAILS}\n  ${DATE}: marker 缺失"
+    DAY_BAD=true
   elif ! python3 -c "import json;d=json.load(open('$MARKER'));assert d.get('messageId')" 2>/dev/null; then
     ((FAILED++)) || true
     DETAILS="${DETAILS}\n  ${DATE}: messageId 缺失/投递失败"
+    DAY_BAD=true
+  fi
+
+  if $DAY_BAD; then
+    ((CONSEC_CURRENT++)) || true
+    [[ $CONSEC_CURRENT -eq 1 ]] && CONSEC_START="$DATE"
+    if [[ $CONSEC_CURRENT -gt $CONSEC_MAX ]]; then
+      CONSEC_MAX=$CONSEC_CURRENT
+      CONSEC_MAX_START="$CONSEC_START"
+      CONSEC_MAX_END="$DATE"
+    fi
+  else
+    CONSEC_CURRENT=0
   fi
 done
 
 TOTAL=$((MISSING + FAILED))
 
-if [[ $TOTAL -ge 2 ]]; then
-  MSG="⚠️ 自学习日报投递巡检：过去 7 天有 ${MISSING} 天缺失 marker、${FAILED} 天投递失败（共 ${TOTAL} 天异常），请检查。${DETAILS}"
+# Alert if longest consecutive streak >= threshold
+if [[ $CONSEC_MAX -ge $ALERT_THRESHOLD ]]; then
+  MSG="⚠️ 自学习日报投递巡检告警：过去 7 天有 ${TOTAL} 天异常（${MISSING} 缺失 / ${FAILED} 失败），最长连续异常 ${CONSEC_MAX} 天（${CONSEC_MAX_START} ~ ${CONSEC_MAX_END}），已超阈值 ${ALERT_THRESHOLD} 天。${DETAILS}"
   echo "Sending audit alert to $ALERT_TARGET..."
   openclaw message send --channel feishu --target "$ALERT_TARGET" -m "$MSG"
   echo "Audit alert sent."

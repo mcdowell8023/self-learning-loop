@@ -124,11 +124,16 @@ describe('daily-report-generator', () => {
     expect(report).toContain('### 📉 信号太弱 (1)');
   });
 
-  it('supports large candidate snapshots', () => {
-    const candidates = Array.from({ length: 12 }, (_, i) => makeCandidate(`sha256:id${String(i).padStart(6, '0')}`, `cat_${i}`));
+  it('renders compact snapshot with recent + stale grouping', () => {
+    const candidates = Array.from({ length: 12 }, (_, i) => makeCandidate(`sha256:id${String(i).padStart(6, '0')}`, `cat_${i}`, 'pending', `2026-04-${String(15 + i).padStart(2, '0')}T08:00:00.000Z`));
     const report = generateDailyReport(makeData({ newCandidatesToday: candidates, totalCandidates: 12, staleBacklog: [], candidateSnapshot: candidates }));
-    expect(report).toContain('| ID | 标题 | 状态 | 创建于 | 龄期 |');
-    expect(report).toContain('Cat 0');
+    expect(report).toContain('| 标题 | 创建于（龄期） |');
+    expect(report).toContain('Cat 11');
+    // 默认只示最近 3 条 + 总数完整列表提示
+    expect(report).toContain('共 12 条候选');
+    expect(report).toMatch(/🆕 最近 3 条/);
+    // 不再包含旧表头（ID/状态列）
+    expect(report).not.toContain('| ID | 标题 | 状态 | 创建于 | 龄期 |');
   });
 
   it('writes a new report file', async () => {
@@ -210,10 +215,10 @@ describe('daily-report-generator', () => {
     expect(content).toContain('采集事件：** 200');
     expect(content).toContain('候选库总数：** 7');
 
-    // Snapshot table reflects the newest cumulative snapshot
-    expect(content).toContain('run3ccc');
-    expect(content).toContain('run2bbb');
-    expect(content).toContain('run1aaa');
+    // Snapshot table reflects the newest cumulative snapshot (T-051: by title, no short id)
+    expect(content).toContain('CLI 兼容性');
+    expect(content).toContain('发版流程');
+    expect(content).toContain('模型路由故障识别');
 
     // Action recommendations block is present (latest render)
     expect(content).toContain('## 🎯 行动建议');

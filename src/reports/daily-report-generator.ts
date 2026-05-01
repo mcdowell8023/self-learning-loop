@@ -146,16 +146,70 @@ function renderDroppedSummary(droppedSummary: Record<string, DroppedItem[]>): st
   ].join('\n')).join('\n');
 }
 
-function renderBacklogTable(candidates: Candidate[], date: string): string {
+const STALE_DAYS_THRESHOLD = 4;
+const SNAPSHOT_RECENT_LIMIT = 3;
+
+/** 紧凑表格：标题 + 创建/龄期 合并列。已删除 ID、状态列。 */
+function renderCompactCandidateTable(candidates: Candidate[], date: string): string {
   if (candidates.length === 0) return '无候选。';
-  const rows = candidates
-    .sort((a, b) => a.created_at.localeCompare(b.created_at))
-    .map(candidate => `| ${shortId(candidate.candidate_id)} | ${titleForCandidate(candidate)} | ${candidate.state} | ${candidate.created_at.slice(0, 10)} | ${ageDays(candidate.created_at, date)} 天 |`);
+  const rows = candidates.map(candidate => {
+    const age = ageDays(candidate.created_at, date);
+    const dateStr = candidate.created_at.slice(0, 10);
+    return `| ${titleForCandidate(candidate)} | ${dateStr} (${age}d) |`;
+  });
   return [
-    '| ID | 标题 | 状态 | 创建于 | 龄期 |',
-    '|----|------|------|--------|------|',
+    '| 标题 | 创建于（龄期） |',
+    '|------|----------------|',
     ...rows,
   ].join('\n');
+}
+
+/** 超期分组（旧版 stale section 入口）。保留全部超期项，按龄期 desc 排列。 */
+function renderBacklogTable(candidates: Candidate[], date: string): string {
+  if (candidates.length === 0) return '无候选。';
+  const sorted = [...candidates].sort((a, b) => ageDays(b.created_at, date) - ageDays(a.created_at, date));
+  return renderCompactCandidateTable(sorted, date);
+}
+
+/**
+ * 候选库快照精简渲染（T-051）。
+ * 输出结构：
+ *   ⚠️ 超期 ≥ 4 天 (N)：完整表格
+ *   🆕 最近 3 条：按 created_at desc
+ *   📊 全量统计 + 提示
+ */
+function renderCandidateSnapshot(candidates: Candidate[], date: string, byState: Record<string, number>): string {
+  if (candidates.length === 0) return '无候选。';
+
+  const stale = candidates.filter(c => ageDays(c.created_at, date) >= STALE_DAYS_THRESHOLD);
+  const fresh = [...candidates].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const recent = fresh.slice(0, SNAPSHOT_RECENT_LIMIT);
+
+  const blocks: string[] = [];
+
+  if (stale.length > 0) {
+    blocks.push(`### ⚠️ 超期 ≥ ${STALE_DAYS_THRESHOLD} 天 (${stale.length})`);
+    blocks.push('');
+    blocks.push(renderCompactCandidateTable(
+      [...stale].sort((a, b) => ageDays(b.created_at, date) - ageDays(a.created_at, date)),
+      date,
+    ));
+    blocks.push('');
+  }
+
+  blocks.push(`### 🆕 最近 ${Math.min(SNAPSHOT_RECENT_LIMIT, recent.length)} 条（共 ${candidates.length} 条候选）`);
+  blocks.push('');
+  blocks.push(renderCompactCandidateTable(recent, date));
+  blocks.push('');
+
+  const stateSummary = Object.entries(byState)
+    .filter(([, count]) => count > 0)
+    .map(([state, count]) => `${state} ${count}`)
+    .join(' / ');
+  blocks.push(`📊 候选库共 ${candidates.length} 条${stateSummary ? `（${stateSummary}）` : ''}。`);
+  blocks.push('🔍 完整列表：openclaw-learn review list（或见 learn/candidates/）');
+
+  return blocks.join('\n');
 }
 
 function renderHeader(data: DailyReportData, latestRun: ReflectionRun, reflectCount: number): string {
@@ -205,7 +259,7 @@ function renderHeader(data: DailyReportData, latestRun: ReflectionRun, reflectCo
     '',
     '## 📚 候选库快照',
     '',
-    snapshotCandidates.length > 0 ? renderBacklogTable(snapshotCandidates, data.date) : '无候选。',
+    snapshotCandidates.length > 0 ? renderCandidateSnapshot(snapshotCandidates, data.date, data.candidatesByState) : '无候选。',
     '',
     '## 🎯 行动建议',
     '',

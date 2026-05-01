@@ -222,7 +222,7 @@ describe('daily-report-generator', () => {
 
     // Action recommendations block is present (latest render)
     expect(content).toContain('## 🎯 行动建议');
-    expect(content).toContain('openclaw-learn review show');
+    expect(content).toContain('openclaw-learn review list');
 
     // All three run sections preserved with continuous numbering
     expect(content).toContain('## Run #1 · 2026-04-27T10:00:00+08:00');

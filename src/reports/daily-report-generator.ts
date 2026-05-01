@@ -87,34 +87,25 @@ function quoteBlock(text?: string): string {
     .join('\n');
 }
 
+function truncateLine(text: string | undefined, maxLen = 80): string {
+  if (!text) return '（无）';
+  const single = text.replace(/\n/g, ' ').trim();
+  return single.length <= maxLen ? single : `${single.slice(0, maxLen - 1)}…`;
+}
+
 function renderCandidateCard(candidate: Candidate, index: number, date: string): string {
   const firstInstance = candidate.instances[0];
   const triggerSummary = candidate.strategy.trigger_event?.summary ?? candidate.strategy.summary ?? candidate.strategy.trigger_conditions;
-  const assertions = firstInstance?.assertions ?? [];
-  const assertionsBlock = assertions.length > 0
-    ? assertions.map(assertion => `- \`${assertion.type}\`${assertion.description ? ` ${assertion.description}` : ''}${assertion.command ? `\n  - command: \`${assertion.command}\`` : ''}${typeof assertion.expected_exit_code === 'number' ? `\n  - expected_exit_code: ${assertion.expected_exit_code}` : ''}`).join('\n')
-    : '- （无断言）';
+  const source = firstInstance?.source_sessions?.[0]?.session_id ?? 'unknown';
+  const createdDate = candidate.created_at.slice(0, 10);
 
   return [
-    `### ${index}. ${titleForCandidate(candidate)} \`${candidate.strategy.problem_category}\``,
+    `### ${index}. ${titleForCandidate(candidate)}`,
+    `📅 ${createdDate} · ${candidate.state} · ${source}`,
+    `**触发：** ${truncateLine(triggerSummary)}`,
+    `**行动：** ${truncateLine(candidate.strategy.recommended_action)}`,
+    `📁 \`learn/candidates/${date}/${candidate.candidate_id}-${candidate.strategy.problem_category}.md\``,
     '',
-    `- **ID：** \`${candidate.candidate_id}\`（短：${shortId(candidate.candidate_id)}）`,
-    `- **状态：** ${candidate.state}`,
-    `- **创建时间：** ${candidate.created_at}`,
-    `- **来源：** ${firstInstance?.source_sessions?.[0]?.session_id ?? 'unknown'}`,
-    '',
-    '**触发条件：**',
-    quoteBlock(triggerSummary),
-    '',
-    '**建议行动：**',
-    quoteBlock(candidate.strategy.recommended_action),
-    '',
-    '**断言：**',
-    assertionsBlock,
-    '',
-    `📁 候选文件：\`learn/candidates/${date}/${candidate.candidate_id}-${candidate.strategy.problem_category}.md\``,
-    '',
-    '---',
   ].join('\n');
 }
 
@@ -212,6 +203,37 @@ function renderCandidateSnapshot(candidates: Candidate[], date: string, byState:
   return blocks.join('\n');
 }
 
+function renderActionRecommendations(data: DailyReportData): string {
+  // Pick top 3 actionable items: stale ≥5d first, then new with specific triggers
+  interface ActionItem { id: string; title: string; hint: string; priority: number }
+  const items: ActionItem[] = [];
+
+  for (const c of data.staleBacklog) {
+    const age = ageDays(c.created_at, data.date);
+    if (age >= 5) {
+      items.push({ id: shortId(c.candidate_id), title: titleForCandidate(c), hint: `超期 ${age} 天，建议尽快决策`, priority: age });
+    }
+  }
+
+  for (const c of data.newCandidatesToday) {
+    const trigger = c.strategy.trigger_event?.summary ?? c.strategy.trigger_conditions ?? '';
+    const specificity = trigger.length;
+    items.push({ id: shortId(c.candidate_id), title: titleForCandidate(c), hint: '今日新增，值得审阅', priority: specificity > 20 ? 50 : 10 });
+  }
+
+  items.sort((a, b) => b.priority - a.priority);
+  const top = items.slice(0, 3);
+
+  if (top.length === 0) {
+    return '今日无需紧急决策。\n\n💡 完整候选清单见 `openclaw-learn review list`';
+  }
+
+  const lines = top.map(item => `→ ${item.id} ${item.title} · ${item.hint}`);
+  lines.push('');
+  lines.push('💡 完整候选清单见 `openclaw-learn review list`');
+  return lines.join('\n');
+}
+
 function renderHeader(data: DailyReportData, latestRun: ReflectionRun, reflectCount: number): string {
   const fm = {
     date: data.date,
@@ -263,9 +285,7 @@ function renderHeader(data: DailyReportData, latestRun: ReflectionRun, reflectCo
     '',
     '## 🎯 行动建议',
     '',
-    '1. review 新候选（命令：`openclaw-learn review show <ID>`）',
-    '2. 处理超期未审：`openclaw-learn review list --status pending`',
-    '3. 查看完整候选：`ls ~/.openclaw/workspace/learn/candidates/`',
+    renderActionRecommendations(data),
     '',
   ].join('\n');
 }

@@ -67,8 +67,15 @@ TOTAL=$((MISSING + FAILED))
 if [[ $CONSEC_MAX -ge $ALERT_THRESHOLD ]]; then
   MSG="⚠️ 自学习日报投递巡检告警：过去 7 天有 ${TOTAL} 天异常（${MISSING} 缺失 / ${FAILED} 失败），最长连续异常 ${CONSEC_MAX} 天（${CONSEC_MAX_START} ~ ${CONSEC_MAX_END}），已超阈值 ${ALERT_THRESHOLD} 天。${DETAILS}"
   echo "Sending audit alert to $ALERT_TARGET..."
-  openclaw message send --channel feishu --target "$ALERT_TARGET" -m "$MSG"
-  echo "Audit alert sent."
+  if [[ "${DELIVERY_DRY_RUN:-0}" == "1" || "${OPENCLAW_TEST_MODE:-0}" == "1" ]]; then
+    echo "[dry-run] ${MSG}"
+  elif [[ "${ALLOW_REAL_SEND:-0}" == "1" ]]; then
+    openclaw message send --channel feishu --target "$ALERT_TARGET" -m "$MSG"
+    echo "Audit alert sent."
+  else
+    echo "DRY_RUN_REQUIRED: set ALLOW_REAL_SEND=1 to send audit alert, or DELIVERY_DRY_RUN=1 for dry-run." >&2
+    exit 1
+  fi
 else
   # Normal — stay silent (no noise)
   exit 0

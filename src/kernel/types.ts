@@ -164,4 +164,5 @@ export interface Candidate {
   dormant_reason?: DormantReason | null;
   created_at: string;
   updated_at: string;
+  title?: string;
 }

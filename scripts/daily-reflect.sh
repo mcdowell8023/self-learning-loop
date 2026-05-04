@@ -127,9 +127,12 @@ fail_stdout() {
 }
 
 # ── Execute ───────────────────────────────────────────────────────
-if $DRY_RUN; then
+if $DRY_RUN || [[ "${DELIVERY_DRY_RUN:-0}" == "1" ]] || [[ "${OPENCLAW_TEST_MODE:-0}" == "1" ]]; then
   jlog "info" "dry-run: would execute: $CMD"
   jlog "info" "dry-run: runtime=$RUNTIME workspace=$WORKSPACE log=$LOG_FILE"
+  if [[ "${DELIVERY_DRY_RUN:-0}" == "1" || "${OPENCLAW_TEST_MODE:-0}" == "1" ]]; then
+    jlog "info" "dry-run: delivery target isolation active (no real send)"
+  fi
   exit 0
 fi
 
@@ -156,9 +159,14 @@ else
 fi
 
 # ── Post-run: invoke reporter + verify delivery marker (T-046) ──
+REPORTER_CMD=(learning-loop-reporter notify --date "$DATE")
+if [[ "${ALLOW_REAL_SEND:-0}" == "1" ]]; then
+  REPORTER_CMD+=(--allow-real-send)
+fi
+
 if command -v learning-loop-reporter &>/dev/null; then
   jlog "info" "Invoking reporter notify --date $DATE" >> "$LOG_FILE"
-  if ! learning-loop-reporter notify --date "$DATE" >> "$LOG_FILE" 2>&1; then
+  if ! "${REPORTER_CMD[@]}" >> "$LOG_FILE" 2>&1; then
     jlog "error" "Reporter notify exited non-zero" >> "$LOG_FILE"
     fail_stdout "reporter_notify" "learning-loop-reporter notify failed"
     exit 1

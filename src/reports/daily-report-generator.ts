@@ -50,6 +50,45 @@ export const DOMAIN_TITLE_MAP: Record<string, string> = {
   context_management: '上下文管理',
   progressive_defer_to_next_day: '渐进式推迟原则',
   credential_token_path_mismatch: '凭证路径不一致',
+  reporter_wrapper_atomicity: 'Reporter 包装器原子性',
+  subagent_output_format_exactness: '子代理输出格式精确性',
+  subagent_output_format_enforcement: '子代理输出格式强制',
+  cron_safety_pause_compliance: 'Cron 安全暂停合规',
+  heartbeat_rule_adherence: '心跳规则遵守',
+  heartbeat_gate_misuse: '心跳门控误用',
+  cron_heartbeat_write_noise: 'Cron 心跳写入噪音',
+  cron_heartbeat_no_reply_logic: 'Cron 心跳 NO_REPLY 逻辑',
+  memory_file_timestamp_parsing: '记忆文件时间戳解析',
+  stdout_dependency_breakage_detection: '标准输出依赖断裂检测',
+  stdout_stderr_visibility: '标准输出/错误可见性',
+  cron_subagent_no_stdout_detection: 'Cron 子代理无输出检测',
+  report_render_staleness: '报告渲染陈旧性',
+  heartbeat_no_watermark_noise: '心跳水印噪音控制',
+  diary_pollution_prevention: '日记污染防护',
+  markdown_output_staleness: 'Markdown 输出陈旧性',
+  single_source_of_truth_violation: '单一事实来源违反',
+  pause_on_blocking_clear_instruction: '阻塞时暂停明确指令',
+  avoid_heartbeat_noise_messaging: '避免心跳噪音消息',
+  cli_flag_gating: 'CLI 标志门控',
+  gitignore_build_output_verification: 'Gitignore 构建产出验证',
+  diary_heartbeat_multi_channel_sanity_check: '日记心跳多通道完整性检查',
+  git_ignored_artifacts_tracked_check: 'Git 忽略产物跟踪检查',
+  feature_flag_gating_for_mock_path: '功能标志门控（Mock 路径）',
+  tool_schema_validation_fallback_edit_payload: '工具 Schema 验证降级',
+  git_ignore_build_artifacts: 'Git 忽略构建产物',
+  staged_change_minimize_and_verify: '暂存变更最小化与验证',
+  diary_heartbeat_channel_scan: '日记心跳通道扫描',
+  'heartbeat-noise_control': '心跳噪音控制',
+  'cron-block-fallback': 'Cron 阻塞降级',
+  'evidence-based-aggregation': '基于证据的聚合',
+  heartbeat_gating: '心跳门控',
+  multi_channel_causal_inference_guard: '多通道因果推断守卫',
+  command_availability_fallback: '命令可用性降级',
+  async_command_management: '异步命令管理',
+  time_window_dedup_logic: '时间窗口去重逻辑',
+  tool_command_missing: '工具命令缺失',
+  json_jq_schema_mismatch: 'JSON/JQ Schema 不匹配',
+  async_long_running_management: '异步长任务管理',
   unknown: '未分类候选',
 };
 
@@ -65,7 +104,13 @@ export function humanizeProblemCategory(value: string): string {
     .join(' ');
 }
 
-export function titleForCandidate(candidate: Pick<Candidate, 'candidate_id' | 'strategy'>): string {
+export const STATE_LABEL: Record<string, string> = {
+  pending: '待审', reviewing: '审核中', shadow: '影子跟踪',
+  validating: '验证中', dormant: '休眠', graduated: '已毕业', rejected: '已退役',
+};
+
+export function titleForCandidate(candidate: Pick<Candidate, 'candidate_id' | 'strategy'> & { title?: string }): string {
+  if (candidate.title) return candidate.title;
   const problemCategory = candidate.strategy.problem_category;
   if (DOMAIN_TITLE_MAP[problemCategory]) return DOMAIN_TITLE_MAP[problemCategory];
   if (problemCategory) return humanizeProblemCategory(problemCategory);
@@ -93,20 +138,19 @@ function truncateLine(text: string | undefined, maxLen = 80): string {
   return single.length <= maxLen ? single : `${single.slice(0, maxLen - 1)}…`;
 }
 
-function renderCandidateCard(candidate: Candidate, index: number, date: string): string {
-  const firstInstance = candidate.instances[0];
+function renderCandidateCard(candidate: Candidate, index: number, _date: string): string {
   const triggerSummary = candidate.strategy.trigger_event?.summary ?? candidate.strategy.summary ?? candidate.strategy.trigger_conditions;
-  const source = firstInstance?.source_sessions?.[0]?.session_id ?? 'unknown';
   const createdDate = candidate.created_at.slice(0, 10);
+  const stateLabel = STATE_LABEL[candidate.state] ?? candidate.state;
 
-  return [
+  const lines = [
     `### ${index}. ${titleForCandidate(candidate)}`,
-    `📅 ${createdDate} · ${candidate.state} · ${source}`,
-    `**触发：** ${truncateLine(triggerSummary)}`,
-    `**行动：** ${truncateLine(candidate.strategy.recommended_action)}`,
-    `📁 \`learn/candidates/${date}/${candidate.candidate_id}-${candidate.strategy.problem_category}.md\``,
-    '',
-  ].join('\n');
+    `📅 ${createdDate} · ${stateLabel}`,
+  ];
+  if (triggerSummary) lines.push(`**问题：** ${truncateLine(triggerSummary)}`);
+  if (candidate.strategy.recommended_action) lines.push(`**规则：** ${truncateLine(candidate.strategy.recommended_action)}`);
+  lines.push('');
+  return lines.join('\n');
 }
 
 function renderDroppedSummary(droppedSummary: Record<string, DroppedItem[]>): string {
@@ -162,53 +206,60 @@ function renderBacklogTable(candidates: Candidate[], date: string): string {
   return renderCompactCandidateTable(sorted, date);
 }
 
+const STATE_GROUP_ICON: Record<string, string> = {
+  pending: '🟡待审',
+  validating: '🔵验证中',
+  dormant: '💤休眠',
+  graduated: '✅已毕业',
+  rejected: '❌已退役',
+  reviewing: '🔵审核中',
+  shadow: '🔵影子跟踪',
+};
+
 /**
- * 候选库快照精简渲染（T-051）。
- * 输出结构：
- *   ⚠️ 超期 ≥ 4 天 (N)：完整表格
- *   🆕 最近 3 条：按 created_at desc
- *   📊 全量统计 + 提示
+ * 候选库快照按 state 分组渲染（T-059）。
  */
-function renderCandidateSnapshot(candidates: Candidate[], date: string, byState: Record<string, number>): string {
+function renderCandidateSnapshot(candidates: Candidate[], date: string, _byState: Record<string, number>): string {
   if (candidates.length === 0) return '无候选。';
 
-  const stale = candidates.filter(c => ageDays(c.created_at, date) >= STALE_DAYS_THRESHOLD);
-  const fresh = [...candidates].sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const recent = fresh.slice(0, SNAPSHOT_RECENT_LIMIT);
+  // Group by state
+  const groups = new Map<string, Candidate[]>();
+  for (const c of candidates) {
+    const arr = groups.get(c.state) ?? [];
+    arr.push(c);
+    groups.set(c.state, arr);
+  }
 
+  const stateOrder = ['pending', 'reviewing', 'validating', 'shadow', 'dormant', 'graduated', 'rejected'];
   const blocks: string[] = [];
 
-  if (stale.length > 0) {
-    blocks.push(`### ⚠️ 超期 ≥ ${STALE_DAYS_THRESHOLD} 天 (${stale.length})`);
+  for (const state of stateOrder) {
+    const group = groups.get(state);
+    if (!group || group.length === 0) continue;
+    const icon = STATE_GROUP_ICON[state] ?? state;
+    const warning = state === 'pending' ? ' ⚠️' : '';
+    blocks.push(`### ${icon} (${group.length})${warning}`);
     blocks.push('');
     blocks.push(renderCompactCandidateTable(
-      [...stale].sort((a, b) => ageDays(b.created_at, date) - ageDays(a.created_at, date)),
+      [...group].sort((a, b) => ageDays(b.created_at, date) - ageDays(a.created_at, date)),
       date,
     ));
     blocks.push('');
   }
 
-  blocks.push(`### 🆕 最近 ${Math.min(SNAPSHOT_RECENT_LIMIT, recent.length)} 条（共 ${candidates.length} 条候选）`);
-  blocks.push('');
-  blocks.push(renderCompactCandidateTable(recent, date));
-  blocks.push('');
-
-  const stateSummary = Object.entries(byState)
-    .filter(([, count]) => count > 0)
-    .map(([state, count]) => `${state} ${count}`)
-    .join(' / ');
-  blocks.push(`📊 候选库共 ${candidates.length} 条${stateSummary ? `（${stateSummary}）` : ''}。`);
+  blocks.push(`📊 候选库共 ${candidates.length} 条。`);
   blocks.push('🔍 完整列表：openclaw-learn review list（或见 learn/candidates/）');
 
   return blocks.join('\n');
 }
 
 function renderActionRecommendations(data: DailyReportData): string {
-  // Pick top 3 actionable items: stale ≥5d first, then new with specific triggers
+  // Pick top 3 actionable items: stale pending ≥5d first, then new with specific triggers
   interface ActionItem { id: string; title: string; hint: string; priority: number }
   const items: ActionItem[] = [];
 
   for (const c of data.staleBacklog) {
+    if (c.state !== 'pending') continue;
     const age = ageDays(c.created_at, data.date);
     if (age >= 5) {
       items.push({ id: shortId(c.candidate_id), title: titleForCandidate(c), hint: `超期 ${age} 天，建议尽快决策`, priority: age });
@@ -246,6 +297,15 @@ function renderHeader(data: DailyReportData, latestRun: ReflectionRun, reflectCo
   };
   const snapshotCandidates = data.candidateSnapshot ?? [];
 
+  // Only pending stale
+  const pendingStale = data.staleBacklog.filter(c => c.state === 'pending');
+
+  // 总览区动态遍历 candidatesByState + 中文 label
+  const stateSummary = Object.entries(data.candidatesByState)
+    .filter(([, count]) => count > 0)
+    .map(([state, count]) => `${STATE_LABEL[state] ?? state} ${count}`)
+    .join(' / ');
+
   return [
     '---',
     YAML.stringify(fm).trim(),
@@ -256,12 +316,9 @@ function renderHeader(data: DailyReportData, latestRun: ReflectionRun, reflectCo
     `> 生成时间：${latestRun.generatedAt}`,
     `> Reflect: events=${latestRun.eventsCollected} · 新增=${latestRun.candidatesGenerated} · 丢弃=${latestRun.candidatesDropped} · 耗时=${(latestRun.durationMs / 1000).toFixed(1)}s`,
     '',
-    '## 📊 总览',
+    '## 🎯 行动建议',
     '',
-    `- **采集事件：** ${latestRun.eventsCollected}`,
-    `- **新增候选：** ${latestRun.candidatesGenerated}`,
-    `- **被丢弃：** ${latestRun.candidatesDropped}`,
-    `- **候选库总数：** ${data.totalCandidates}（pending ${data.candidatesByState.pending ?? 0} / reviewing ${data.candidatesByState.reviewing ?? 0} / shadow ${data.candidatesByState.shadow ?? 0} / graduated ${data.candidatesByState.graduated ?? 0}）`,
+    renderActionRecommendations(data),
     '',
     '## 🆕 今日新增候选',
     '',
@@ -269,23 +326,22 @@ function renderHeader(data: DailyReportData, latestRun: ReflectionRun, reflectCo
       ? data.newCandidatesToday.map((candidate, index) => renderCandidateCard(candidate, index + 1, data.date)).join('\n')
       : '今日无新增候选。',
     '',
+    '## 📊 总览',
+    '',
+    `- **采集事件：** ${latestRun.eventsCollected}`,
+    `- **新增候选：** ${latestRun.candidatesGenerated}`,
+    `- **被丢弃：** ${latestRun.candidatesDropped}`,
+    `- **候选库总数：** ${data.totalCandidates}（${stateSummary}）`,
+    '',
     '## ⚠️ 被丢弃的候选',
     '',
     renderDroppedSummary(data.droppedSummary),
     '',
-    '## ⏰ 超期未审（pending ≥ 4 天）',
-    '',
-    data.staleBacklog.length > 0
-      ? renderBacklogTable(data.staleBacklog, data.date)
-      : '无超期候选。',
-    '',
-    '## 📚 候选库快照',
+    `<details><summary>📚 候选库快照（共 ${snapshotCandidates.length} 条）</summary>`,
     '',
     snapshotCandidates.length > 0 ? renderCandidateSnapshot(snapshotCandidates, data.date, data.candidatesByState) : '无候选。',
     '',
-    '## 🎯 行动建议',
-    '',
-    renderActionRecommendations(data),
+    '</details>',
     '',
   ].join('\n');
 }

@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { generateDailyReport, humanizeProblemCategory, renderRunSection, shortId, titleForCandidate, writeOrAppendDailyReport, type DailyReportData, type ReflectionRun } from './daily-report-generator.js';
+import { generateDailyReport, humanizeProblemCategory, renderRunSection, shortId, titleForCandidate, writeOrAppendDailyReport, STATE_LABEL, type DailyReportData, type ReflectionRun } from './daily-report-generator.js';
 import type { Candidate } from '../kernel/types.js';
 import type { DroppedItem } from '../reflect/candidate-generator.js';
 
@@ -86,7 +86,14 @@ describe('daily-report-generator', () => {
     expect(report).toContain('# 学习闭环日报 · 2026-04-27');
     expect(report).toContain('## 📊 总览');
     expect(report).toContain('## 🆕 今日新增候选');
+    expect(report).toContain('## 🎯 行动建议');
     expect(report).toContain('## Run #1 · 2026-04-27T16:30:00+08:00');
+    // New order: 行动建议 before 今日新增候选
+    const actionIdx = report.indexOf('## 🎯 行动建议');
+    const newIdx = report.indexOf('## 🆕 今日新增候选');
+    const overviewIdx = report.indexOf('## 📊 总览');
+    expect(actionIdx).toBeLessThan(newIdx);
+    expect(newIdx).toBeLessThan(overviewIdx);
   });
 
   it('includes yaml frontmatter', () => {
@@ -96,8 +103,22 @@ describe('daily-report-generator', () => {
     expect(report).toContain('total_candidates: 3');
   });
 
-  it('renders known domain titles in chinese', () => {
-    expect(titleForCandidate(makeCandidate('sha256:68b21d20a87ab861'))).toBe('模型路由故障识别');
+  it('exports STATE_LABEL map', () => {
+    expect(STATE_LABEL.pending).toBe('待审');
+    expect(STATE_LABEL.graduated).toBe('已毕业');
+  });
+
+  it('titleForCandidate prefers candidate.title field', () => {
+    const c = makeCandidate('sha256:68b21d20a87ab861');
+    (c as any).title = '自定义标题';
+    expect(titleForCandidate(c)).toBe('自定义标题');
+  });
+
+  it('renders candidate card without file path', () => {
+    const report = generateDailyReport(makeData());
+    expect(report).not.toContain('📁 `learn/candidates/');
+    // Uses Chinese state label
+    expect(report).toContain('待审');
   });
 
   it('humanizes unknown problem categories', () => {
@@ -124,16 +145,16 @@ describe('daily-report-generator', () => {
     expect(report).toContain('### 📉 信号太弱 (1)');
   });
 
-  it('renders compact snapshot with recent + stale grouping', () => {
+  it('renders compact snapshot with state grouping', () => {
     const candidates = Array.from({ length: 12 }, (_, i) => makeCandidate(`sha256:id${String(i).padStart(6, '0')}`, `cat_${i}`, 'pending', `2026-04-${String(15 + i).padStart(2, '0')}T08:00:00.000Z`));
     const report = generateDailyReport(makeData({ newCandidatesToday: candidates, totalCandidates: 12, staleBacklog: [], candidateSnapshot: candidates }));
     expect(report).toContain('| 标题 | 创建于（龄期） |');
-    expect(report).toContain('Cat 11');
-    // 默认只示最近 3 条 + 总数完整列表提示
-    expect(report).toContain('共 12 条候选');
-    expect(report).toMatch(/🆕 最近 3 条/);
-    // 不再包含旧表头（ID/状态列）
-    expect(report).not.toContain('| ID | 标题 | 状态 | 创建于 | 龄期 |');
+    // Grouped by state
+    expect(report).toContain('🟡待审 (12) ⚠️');
+    expect(report).toContain(`候选库共 12 条`);
+    // Wrapped in <details>
+    expect(report).toContain('<details><summary>📚 候选库快照（共 12 条）</summary>');
+    expect(report).toContain('</details>');
   });
 
   it('writes a new report file', async () => {

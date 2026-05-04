@@ -61,6 +61,7 @@ if [[ "$RUNTIME" == "openclaw" ]]; then
     CRON_MSG="exec: bash ${REFLECT_SCRIPT}"
     if $DRY_RUN; then
       echo "[dry-run] Would run: openclaw cron add --name self-learning-loop-daily-reflect --cron '${SCHEDULE}' --tz Asia/Shanghai --session isolated --tools exec,read --model github-copilot/claude-haiku-4.5 --message '${CRON_MSG}'"
+      echo "[dry-run] Reminder: daily-reflect.sh honors DELIVERY_DRY_RUN=1 / OPENCLAW_TEST_MODE=1 / ALLOW_REAL_SEND=1"
     else
       openclaw cron add \
         --name "self-learning-loop-daily-reflect" \
@@ -87,6 +88,7 @@ if [[ "$RUNTIME" == "openclaw" ]]; then
     else
       if $DRY_RUN; then
         echo "[dry-run] Would run: openclaw cron add --name self-learning-loop-weekly-audit --cron '0 1 * * 1' --tz Asia/Shanghai --session isolated --tools exec,read --model github-copilot/claude-haiku-4.5 --message '${AUDIT_MSG}'"
+        echo "[dry-run] Reminder: weekly-delivery-audit.sh honors DELIVERY_DRY_RUN=1 / OPENCLAW_TEST_MODE=1 / ALLOW_REAL_SEND=1"
       else
         # Check if already registered
         if openclaw cron list 2>/dev/null | grep -qi 'weekly-audit'; then

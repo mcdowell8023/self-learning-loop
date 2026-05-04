@@ -1,0 +1,1 @@
+-- no-op: title column is ensured idempotently in CandidateStore.ensureOptionalColumns()

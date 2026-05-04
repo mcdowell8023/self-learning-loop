@@ -110,6 +110,8 @@ export interface CreateCandidateInput {
   initialState?: CandidateState;
   /** 若 initialState='dormant' 必须提供 reason。 */
   dormantReason?: DormantReason | null;
+  /** 可选的人类可读标题。 */
+  title?: string;
 }
 
 export interface ListFilter {
@@ -162,6 +164,7 @@ export class CandidateStore {
     this.db.pragma('synchronous = NORMAL');
 
     this.runMigrations(opts.migrationsDir ?? defaultMigrationsDir());
+    this.ensureOptionalColumns();
   }
 
   private runMigrations(dir: string): void {
@@ -172,6 +175,16 @@ export class CandidateStore {
     for (const file of files) {
       const sql = readFileSync(join(dir, file), 'utf-8');
       this.db.exec(sql);
+    }
+  }
+
+  private ensureOptionalColumns(): void {
+    const cols = this.db.prepare(`PRAGMA table_info(candidate_state)`).all() as Array<{
+      name: string;
+    }>;
+    const hasTitle = cols.some((col) => col.name === 'title');
+    if (!hasTitle) {
+      this.db.exec(`ALTER TABLE candidate_state ADD COLUMN title TEXT`);
     }
   }
 
@@ -242,9 +255,9 @@ export class CandidateStore {
       // 2) candidate_state
       this.db.prepare(`
         INSERT INTO candidate_state (
-          candidate_id, strategy_id, state, dormant_reason, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
-      `).run(candidateId, strategy.strategy_id, initialState, dormantReason, now, now);
+          candidate_id, strategy_id, state, dormant_reason, title, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(candidateId, strategy.strategy_id, initialState, dormantReason, input.title ?? null, now, now);
 
       // 3) 初始 transition 日志
       this.db.prepare(`
@@ -308,7 +321,7 @@ export class CandidateStore {
 
   get(candidateId: string): Candidate | null {
     const stateRow = this.db.prepare(`
-      SELECT candidate_id, strategy_id, state, dormant_reason, created_at, updated_at
+      SELECT candidate_id, strategy_id, state, dormant_reason, title, created_at, updated_at
       FROM candidate_state WHERE candidate_id = ?
     `).get(candidateId) as
       | {
@@ -316,6 +329,7 @@ export class CandidateStore {
           strategy_id: string;
           state: CandidateState;
           dormant_reason: DormantReason | null;
+          title: string | null;
           created_at: string;
           updated_at: string;
         }
@@ -340,6 +354,7 @@ export class CandidateStore {
       instances,
       state: stateRow.state,
       dormant_reason: stateRow.dormant_reason,
+      title: stateRow.title ?? undefined,
       created_at: stateRow.created_at,
       updated_at: stateRow.updated_at,
     };
@@ -620,6 +635,7 @@ export class CandidateStore {
       instances: c.instances,
       state: c.state,
       dormant_reason: c.dormant_reason ?? undefined,
+      title: c.title,
     };
     return YAML.stringify(doc);
   }
@@ -634,6 +650,7 @@ export class CandidateStore {
       instances?: Instance[];
       state?: CandidateState;
       dormant_reason?: DormantReason | null;
+      title?: string;
     };
 
     if (!parsed?.strategy?.strategy_id) {
@@ -652,6 +669,7 @@ export class CandidateStore {
       instances: parsed.instances ?? [],
       initialState: parsed.state ?? 'pending',
       dormantReason: parsed.dormant_reason ?? null,
+      title: parsed.title ?? undefined,
     });
   }
 

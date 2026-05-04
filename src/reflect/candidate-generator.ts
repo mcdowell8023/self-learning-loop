@@ -26,6 +26,7 @@ import type {
   TriggerEventMeta,
 } from '../kernel/types.js';
 import type { CandidateStore } from '../store/candidate-store.js';
+import { titleForCandidate } from '../reports/daily-report-generator.js';
 import type { LLMClient, LLMCompleteOptions } from './llm-client.js';
 import {
   buildReflectPrompt,
@@ -284,10 +285,12 @@ export class CandidateGenerator {
           });
           continue;
         }
+        const title = titleForCandidate({ candidate_id: c.strategy.strategy_id, strategy: c.strategy });
         this.store.create({
           strategy: c.strategy,
           instances: [c.instance],
           initialState: 'pending',
+          title,
         });
         persistedCount++;
       } catch (err) {

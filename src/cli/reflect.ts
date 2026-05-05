@@ -801,7 +801,19 @@ export async function runReflect(opts: ReflectRunOptions): Promise<ReflectResult
     if (!parsed.dryRun) {
       out(`\n📝 Daily report written: ${reportPathRelative}\n`);
     }
-    invokeReporterHook(reportPath, workspace, out, err);
+    // T-061: reflect 主流程不再自动投递日报，避免与 daily-reflect.sh wrapper
+    // 的 reporter notify 形成双投递。invokeReporterHook 函数体保留，仅删除调用点。
+    // 注意：手动直接执行 `openclaw-learn reflect` 时不会发送日报；
+    //       定时任务由 daily-reflect.sh 负责调用 reporter notify 并校验 marker。
+    writeAuditEvent(workspace, {
+      event: 'reporter_delegated',
+      report_path: reportPath,
+      delivery_mode: 'wrapper',
+      reason: 't061_double_delivery_guard',
+    });
+    if (!parsed.dryRun) {
+      out(`\nℹ️  reflect 不再自动投递日报；如需发送，请通过 daily-reflect.sh（cron 自动）或手动调用 learning-loop-reporter notify。\n`);
+    }
 
     return { exitCode: (result.error && result.candidates.length === 0 && result.dropped.length === 0) ? 0 : (result.error ? 1 : 0) };
   } finally {

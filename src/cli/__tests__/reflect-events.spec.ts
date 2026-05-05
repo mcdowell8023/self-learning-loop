@@ -5,8 +5,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { buildReporterNotifyArgs, findReporterSkill, invokeReporterHook, writeReflectionEvent } from '../reflect.js';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 
 describe('findReporterSkill', () => {
   let tmpHome: string;
@@ -110,6 +111,30 @@ describe('reporter notify args', () => {
 
   it('builds notify args with --report instead of legacy --event', () => {
     expect(buildReporterNotifyArgs('/tmp/report.md')).toEqual(['notify', '--report', '/tmp/report.md']);
+  });
+
+  // T-061: reflect main flow no longer auto-invokes reporter to prevent
+  // double-delivery with daily-reflect.sh wrapper. The hook function body is
+  // preserved (still callable for legacy/manual paths) but the call site
+  // inside runReflect() must remain removed.
+  it('T-061: runReflect main flow does not invoke reporter (source-level lock)', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const reflectSrc = readFileSync(resolve(here, '..', 'reflect.ts'), 'utf-8');
+
+    // Locate the runReflect function body.
+    const startIdx = reflectSrc.indexOf('export async function runReflect');
+    expect(startIdx, 'runReflect function should exist').toBeGreaterThan(-1);
+    const runReflectBody = reflectSrc.slice(startIdx);
+
+    // No invokeReporterHook(...) call expression inside runReflect.
+    // The function definition itself is above startIdx, so any match here is a call site.
+    expect(runReflectBody).not.toMatch(/invokeReporterHook\s*\(/);
+
+    // The replacement audit event must exist with the required fields.
+    expect(runReflectBody).toMatch(/event:\s*'reporter_delegated'/);
+    expect(runReflectBody).toMatch(/delivery_mode:\s*'wrapper'/);
+    expect(runReflectBody).toMatch(/reason:\s*'t061_double_delivery_guard'/);
+    expect(runReflectBody).toMatch(/report_path:\s*reportPath/);
   });
 
   it('invokeReporterHook calls reporter with --report and never --event', () => {
